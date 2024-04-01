@@ -6,12 +6,18 @@ from multiprocessing import Process
 # --- FAST API ---#
 from fastapi import Response
 from fastapi import FastAPI
-from api.user import main
+
+import api.user.main as user
+import api.repos.main as repos
+# from api.user import main
+# from api.repos import main
+
 # --- settings --- #
 from settings import *
 
 app = FastAPI()
-app.include_router(main.router)
+app.include_router(user.router)
+app.include_router(repos.router)
 
 #-------------- ROOT ---------------------#
 @app.get("/home")
