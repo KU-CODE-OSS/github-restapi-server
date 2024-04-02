@@ -46,7 +46,7 @@ async def get(github_id: str):
     item = {
         'id': userinfo["id"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/node_id', response_class = Response)
@@ -55,7 +55,7 @@ async def get(github_id: str):
     item = {
         'node_id': userinfo["node_id"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/avatar_url', response_class = Response)
@@ -64,7 +64,7 @@ async def get(github_id: str):
     item = {
         'avatar_url': userinfo["avatar_url"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/follower_list', response_class = Response)
@@ -73,7 +73,6 @@ async def get(github_id: str):
     id_list = []
     while True:
         follower_list = await callGithubAPI(f'followers?q=&page={page}&per_page=100', github_id=github_id)
-        print(len(follower_list))
         if len(follower_list) == 0:
             break
 
@@ -84,17 +83,16 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return json.dumps(id_list)
+    return response(id_list)
 
 
 @router.get('/followers', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'followers': userinfo["followers"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/following_list', response_class = Response)
@@ -103,7 +101,6 @@ async def get(github_id: str):
     id_list = []
     while True:
         following_list = await callGithubAPI(f'following?q=&page={page}&per_page=100', github_id=github_id)
-        print(len(following_list))
         if len(following_list) == 0:
             break
 
@@ -114,7 +111,7 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return json.dumps(id_list)
+    return response(id_list)
 
 
 @router.get('/following', response_class = Response)
@@ -123,27 +120,25 @@ async def get(github_id: str):
     item = {
         'following': userinfo["following"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/name', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'name': userinfo["name"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/public_repos', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'public_repos': userinfo["public_repos"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/repo_list', response_class = Response)
@@ -152,7 +147,6 @@ async def get(github_id: str):
     id_list = []
     while True:
         repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
-        print(len(repo_list))
         if len(repo_list) == 0:
             break
 
@@ -164,7 +158,7 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return json.dumps(id_list)
+    return response(id_list)
 
 
 @router.get('/following', response_class = Response)
@@ -173,37 +167,34 @@ async def get(github_id: str):
     item = {
         'following': userinfo["following"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/public_gists', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'public_repos': userinfo["public_gists"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/created_at', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'created_at': userinfo["created_at"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('/updated_at', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
-    print(userinfo)
     item = {
         'created_at': userinfo["updated_at"]
     }
-    return json.dumps(item)
+    return response(item)
 
 
 @router.get('', response_class = Response)
@@ -222,4 +213,25 @@ async def get(github_id: str):
         #'email': student['email'],
         # 'Crawled_Date': datetime.now().strftime("%Y%m%d_%H%M%S")
     }
-    return json.dumps(user_item)
+    return response(user_item)
+
+
+@router.get('/repos', response_class = Response)
+async def get(github_id: str):
+
+    page = 1
+    repos = []
+    while True:
+        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
+        if len(repo_list) == 0:
+            break
+
+        for key in repo_list:
+            user = {
+                'id': key['id'],
+                'name' : key['name'],
+                'full_name' : key['full_name']
+            }
+            repos.append(user)
+        page += 1
+    return response(repos)
