@@ -13,8 +13,6 @@ async def request(url, header):
     r = httpx.get(url,headers=header)
     return r.json()
 
-
-
 async def callGithubAPI(suffix_URL, github_id):
     token = get_github_token()
     headers = {
@@ -24,15 +22,57 @@ async def callGithubAPI(suffix_URL, github_id):
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
-    student = json.loads(json_str)
-    return student
+    response = json.loads(json_str)
+    return response
 
-@router.get('', response_class = Response)
+# -------------------- Get all Data ------------------------------#
+@router.get('', response_class=Response)
 async def get(github_id: str, repo_name: str):
 
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    return response(repo)
 
+    #commits = await callGithubAPI(suffix_URL=f'{repo_name}/commits', github_id=github_id)
+    #commit_count = len(commits)
+
+    #closed_issues = await callGithubAPI(suffix_URL=f'{repo_name}/issues?state=closed', github_id=github_id)
+    #closed_issue_count = len(closed_issues)
+
+    languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
+    language_list = list(languages.keys())
+
+    contributors = await callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
+    contributor_logins = [contributor['login'] for contributor in contributors]
+
+    readme = await callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
+    has_readme = True if readme else False
+
+    latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
+    release_version = latest_release.get('tag_name', 'No release')
+
+    repo_item = {
+        'id': repo["id"],
+        'name': repo["name"],
+        'url': repo["html_url"],
+        'owner_github_id': repo["owner"]["login"],
+        'created_at': repo["created_at"],
+        'updated_at': repo["updated_at"],
+        'forks_count': repo["forks_count"],
+        'stars_count': repo["stargazers_count"],
+        #'commit_count': commit_count,
+        #'open_issue_count': repo["open_issues_count"],
+        #'closed_issue_count': closed_issue_count,
+        'language': language_list,
+        'contributors': contributor_logins,
+        'license': repo["license"]["name"],
+        'has_readme': has_readme,
+        'description': repo["description"],
+        'release_version': release_version
+    }
+
+    return response(repo_item)
+#----------------------------------------------------------------#
+
+#--------------------- Get data individually --------------------#
 @router.get('/id', response_class = Response)
 async def get(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
@@ -65,7 +105,6 @@ async def get(github_id: str, repo_name: str):
     }
     return response(item)
 
-#--------------------- ADDED by MJ ----------------------------------------
 @router.get('/html_url', response_class = Response)
 async def get(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
@@ -80,7 +119,6 @@ async def get(github_id: str, repo_name: str):
         'owner': github_id
     }
     return response(item)
-#-------------------------------------------------------------
 
 @router.get('/created_at', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -123,24 +161,23 @@ async def get(github_id: str, repo_name: str):
     }
     return response(item)
 
-#--------------------- ADDED by MJ ----------------------------------------
 @router.get('/commit_count', response_class=Response)
 async def get(github_id: str, repo_name: str):
     commit_count = 0
     page = 1
     while True:
-        commits = await callGithubAPI(suffix_URL=f"{repo_name}/commits?page={page}&per_page=100", github_id=github_id)
+        commits = await callGithubAPI(suffix_URL=f"{repo_name}/commits?q=&page={page}&per_page=100", github_id=github_id)
         if not commits:
             break
         
         commit_count += len(commits)
         page += 1
+        print(commit_count)
 
     item = {
         'commit_count': commit_count
     }
     return response(item)
-#-------------------------------------------------------------
 
 @router.get('/watchers_count', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -174,7 +211,6 @@ async def get(github_id: str, repo_name: str):
     }
     return response(item)
 
-#--------------------- ADDED by MJ ----------------------------------------
 @router.get('/closed_issues_count', response_class=Response)
 async def get(github_id: str, repo_name: str):
     closed_issues_count = 0
@@ -196,7 +232,6 @@ async def get(github_id: str, repo_name: str):
 async def get(github_id: str, repo_name: str):
     languages = await callGithubAPI(suffix_URL=f"{repo_name}/languages", github_id=github_id)
 
-    # 프로그래밍 언어의 이름만 추출
     language_names = list(languages.keys())
 
     item = {
@@ -208,7 +243,6 @@ async def get(github_id: str, repo_name: str):
 async def get(github_id: str, repo_name: str):
     countributors = await callGithubAPI(suffix_URL=f"{repo_name}/contributors", github_id=github_id)
 
-    # 프로그래밍 언어의 이름만 추출
     contributors_names = [contributor['login'] for contributor in countributors]
 
     item = {
@@ -258,8 +292,6 @@ async def get(github_id: str, repo_name: str):
     }
     return response(item)
 
-#-------------------------------------------------------------
-
 @router.get('/fork', response_class = Response)
 async def get(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
@@ -296,4 +328,4 @@ async def get(github_id: str, repo_name: str):
             user_list.append(user)
         page += 1
     return response(user_list)
-    
+# ---------------------------------------------------------------#

@@ -22,9 +22,8 @@ async def callGithubAPIUser(github_id):
     url= f'{API_URL}/users/{github_id}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
-    student = json.loads(json_str)
-    return student
-
+    response = json.loads(json_str)
+    return response
 
 async def callGithubAPI(suffix_URL, github_id):
     token = get_github_token()
@@ -35,10 +34,30 @@ async def callGithubAPI(suffix_URL, github_id):
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
-    student = json.loads(json_str)
-    return student
+    response = json.loads(json_str)
+    return response
 
+# -------------------- Get all Data ------------------------------#
+@router.get('', response_class = Response)
+async def get(github_id: str):
+    GithubID = github_id
 
+    student = await callGithubAPIUser(GithubID)
+    
+    user_item = {
+        'GithubID': student['login'],
+        'Follower_CNT': student['followers'],
+        'Following_CNT': student['following'],
+        'Public_repos_CNT': student['public_repos'],
+        'Github_profile_Create_Date': student['created_at'],
+        'Github_profile_Update_Date': student['updated_at'],
+        #'email': student['email'],
+        # 'Crawled_Date': datetime.now().strftime("%Y%m%d_%H%M%S")
+    }
+    return response(user_item)
+# ---------------------------------------------------------------#
+
+# -------------------- Get data individually --------------------#
 @router.get('/id', response_class = Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
@@ -195,26 +214,6 @@ async def get(github_id: str):
     }
     return response(item)
 
-
-@router.get('', response_class = Response)
-async def get(github_id: str):
-    GithubID = github_id
-
-    student = await callGithubAPIUser(GithubID)
-    
-    user_item = {
-        'GithubID': student['login'],
-        'Follower_CNT': student['followers'],
-        'Following_CNT': student['following'],
-        'Public_repos_CNT': student['public_repos'],
-        'Github_profile_Create_Date': student['created_at'],
-        'Github_profile_Update_Date': student['updated_at'],
-        #'email': student['email'],
-        # 'Crawled_Date': datetime.now().strftime("%Y%m%d_%H%M%S")
-    }
-    return response(user_item)
-
-
 @router.get('/repos', response_class = Response)
 async def get(github_id: str):
 
@@ -234,3 +233,4 @@ async def get(github_id: str):
             repos.append(user)
         page += 1
     return response(repos)
+# ---------------------------------------------------------------#
