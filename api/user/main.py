@@ -13,7 +13,6 @@ async def request(url, header):
     r = httpx.get(url,headers=header)
     return r.json()
 
-
 async def callGithubAPIUser(github_id):
     token = get_github_token()
     headers = {

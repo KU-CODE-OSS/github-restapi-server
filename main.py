@@ -9,6 +9,10 @@ from fastapi import FastAPI
 
 import api.user.main as user
 import api.repos.main as repos
+import api.contributor.main as contributor
+import api.issue.main as issue
+import api.pr.main as pr
+import api.commit.main as commit
 # from api.user import main
 # from api.repos import main
 
@@ -18,6 +22,10 @@ from settings import *
 app = FastAPI()
 app.include_router(user.router)
 app.include_router(repos.router)
+app.include_router(contributor.router)
+app.include_router(issue.router)
+app.include_router(pr.router)
+app.include_router(commit.router)
 
 #-------------- ROOT ---------------------#
 @app.get("/home")
@@ -25,43 +33,3 @@ async def root():
 
     return {"message": "Welcome to the FastAPI application"}
 #-----------------------------------------#
-
-
-@app.get('/repo')
-async def start_requests():
-    token = get_github_token()
-    
-    GithubID = 'kdgyun'
-    repoNM = 'k8s-cluster-bootstrap'
-
-    headers = {
-        'Authorization': f'token {token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/repos/{GithubID}/{repoNM}'
-
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    repo = json.loads(json_str)
-    
-    repo_item = {
-
-        'RepoID' : repo['id'],
-        'RepoURL' : repo['html_url'],
-        'RepoNM' : repo['name'],
-        'OwnerGithubID' : repo['owner']['login'],
-        'CreationDate' : repo['created_at'],
-        'ForkCount' : repo['forks_count'],
-        'StarCount' : repo['stargazers_count'],
-        'OpenIssueCount' : repo['open_issues_count'],
-        'LicenseName' : repo['license'],
-        'ProjectDescription' : repo['description'],
-        'ProgrammingLanguage' : None,
-        'Contributors' : None,
-        'CommitCount' : None,
-        'HasReadME' : None,
-        'ReleaseVersion' : None
-    }   
-
-    return repo_item

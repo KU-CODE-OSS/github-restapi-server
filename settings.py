@@ -1,4 +1,3 @@
-
 import json
 # URL
 API_URL = 'https://api.github.com'
