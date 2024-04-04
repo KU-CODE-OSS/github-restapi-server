@@ -51,7 +51,7 @@ async def get(github_id: str):
         'Public_repos_CNT': student['public_repos'],
         'Github_profile_Create_Date': student['created_at'],
         'Github_profile_Update_Date': student['updated_at'],
-        #'email': student['email'],
+        'email': student['email'],
         # 'Crawled_Date': datetime.now().strftime("%Y%m%d_%H%M%S")
     }
     return response(user_item)

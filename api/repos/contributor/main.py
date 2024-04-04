@@ -5,15 +5,15 @@ import httpx
 import json
 
 router = APIRouter(
-    prefix="/api/contributor",
-    tags=['/api/contributor'],
+    prefix="/api/repos/contributor",
+    tags=['/api/repos/contributor'],
 )
 
 async def request(url, header):
     r = httpx.get(url,headers=header)
     return r.json()
 
-async def callGithubAPI(suffix_URL, github_id):
+async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
     token = get_github_token()
     headers = {
         'Authorization': f'token {token}',
@@ -29,7 +29,7 @@ async def callGithubAPI(suffix_URL, github_id):
 @router.get('', response_class = Response)
 async def get(github_id: str, repo_name: str):
 
-    contributors = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+    contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
 
     contributors_list = [
         {

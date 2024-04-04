@@ -5,15 +5,15 @@ import httpx
 import json
 
 router = APIRouter(
-    prefix="/api/issue",
-    tags=['/api/issue'],
+    prefix="/api/repos/issue",
+    tags=['/api/repos/issue'],
 )
 
 async def request(url, header):
     r = httpx.get(url,headers=header)
     return r.json()
 
-async def callGithubAPI(suffix_URL, github_id):
+async def callGithubAPI_ISSUE(suffix_URL, github_id):
     token = get_github_token()
     headers = {
         'Authorization': f'token {token}',
@@ -34,7 +34,7 @@ async def get(github_id: str, repo_name: str):
     for state in states:
         page = 1  
         while True:
-            issue_list = await callGithubAPI(f'{repo_name}/issues?q=&state={state}&page={page}&per_page=100', github_id=github_id)
+            issue_list = await callGithubAPI_ISSUE(f'{repo_name}/issues?q=&state={state}&page={page}&per_page=100', github_id=github_id)
             print(page)
             if not issue_list:  
                 break
@@ -60,7 +60,7 @@ async def get_issues(github_id: str, repo_name: str):
     page = 1
     issues = []
     while True:
-        issue_list = await callGithubAPI(f'{repo_name}/issues?q=&state=open&page={page}&per_page=100', github_id=github_id)
+        issue_list = await callGithubAPI_ISSUE(f'{repo_name}/issues?q=&state=open&page={page}&per_page=100', github_id=github_id)
         if len(issue_list) == 0:
             break
 
@@ -83,7 +83,7 @@ async def get_issues(github_id: str, repo_name: str):
     page = 1
     issues = []
     while True:
-        issue_list = await callGithubAPI(f'{repo_name}/issues?q=&state=closed&page={page}&per_page=100', github_id=github_id)
+        issue_list = await callGithubAPI_ISSUE(f'{repo_name}/issues?q=&state=closed&page={page}&per_page=100', github_id=github_id)
         if len(issue_list) == 0:
             break
 

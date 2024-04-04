@@ -5,8 +5,8 @@ import httpx
 import json
 
 router = APIRouter(
-    prefix="/api/pulls",
-    tags=['/api/pulls'],
+    prefix="/api/repos/pulls",
+    tags=['/api/repos/pulls'],
 )
 
 async def request(url, header):
