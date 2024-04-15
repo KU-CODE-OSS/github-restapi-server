@@ -90,27 +90,20 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     return response
 # ------------------------ #
 
-# --- REQUEST FUNCTIONS (HTTP) ---#
-async def callGithubHTTP(suffix_URL, github_id):
-
-    url = f'{HTML_URL}/{github_id}/{suffix_URL}'
-    result = httpx.get(url)
-    return result
-
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
 async def get(github_id: str, repo_name: str):
 
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
 
-    commit_response = await callGithubHTTP(f'{repo_name}', github_id)
-    issue_response = await callGithubHTTP(f'{repo_name}/issues', github_id)
+    #commit_response = await callGithubHTTP(f'{repo_name}', github_id)
+    #issue_response = await callGithubHTTP(f'{repo_name}/issues', github_id)
 
-    commit_count = BeautifulSoup(commit_response.content, 'html.parser').select_one(HTTP_COMMIT).get_text(strip=True).split()[0]
-    soup = BeautifulSoup(issue_response.content, 'html.parser')
+    #commit_count = BeautifulSoup(commit_response.content, 'html.parser').select_one(HTTP_COMMIT).get_text(strip=True).split()[0]
+    #soup = BeautifulSoup(issue_response.content, 'html.parser')
 
-    open_issues_count = soup.select_one(HTTP_OPEN_ISSUE).get_text(strip=True).split()[0]
-    closed_issues_count = soup.select_one(HTTP_CLOSED_ISSUE).get_text(strip=True).split()[0]
+    #open_issues_count = soup.select_one(HTTP_OPEN_ISSUE).get_text(strip=True).split()[0]
+    #closed_issues_count = soup.select_one(HTTP_CLOSED_ISSUE).get_text(strip=True).split()[0]
 
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys())
