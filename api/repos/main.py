@@ -2,7 +2,6 @@ from fastapi import APIRouter
 from settings import *
 from fastapi import Response
 import httpx
-from bs4 import BeautifulSoup
 import json
 
 # --- ROUTER ---#
@@ -88,6 +87,30 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     json_str = json.dumps(result, indent=4, default=str)
     response = json.loads(json_str)
     return response
+
+async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
+    token = get_github_token()
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+    url= f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
+    result = await request(url,headers)
+    json_str = json.dumps(result, indent=4, default=str)
+    response = json.loads(json_str)
+    return response
+
+async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
+    token = get_github_token()
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+    url= f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
+    result = await request(url,headers)
+    json_str = json.dumps(result, indent=4, default=str)
+    response = json.loads(json_str)
+    return response
 # ------------------------ #
 
 # -------------------- Get all Data ------------------------------#
@@ -96,14 +119,11 @@ async def get(github_id: str, repo_name: str):
 
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
 
-    #commit_response = await callGithubHTTP(f'{repo_name}', github_id)
-    #issue_response = await callGithubHTTP(f'{repo_name}/issues', github_id)
+    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=f'{repo_name}', github_id=github_id)
 
-    #commit_count = BeautifulSoup(commit_response.content, 'html.parser').select_one(HTTP_COMMIT).get_text(strip=True).split()[0]
-    #soup = BeautifulSoup(issue_response.content, 'html.parser')
+    open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="open" )
+    closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="closed" )
 
-    #open_issues_count = soup.select_one(HTTP_OPEN_ISSUE).get_text(strip=True).split()[0]
-    #closed_issues_count = soup.select_one(HTTP_CLOSED_ISSUE).get_text(strip=True).split()[0]
 
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys())
@@ -115,7 +135,7 @@ async def get(github_id: str, repo_name: str):
     has_readme = True if readme else False
 
     latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
-    release_version = latest_release.get('tag_name', 'No release')
+    release_version = latest_release.get('tag_name', None)
 
     repo_item = {
         'id': repo["id"],
@@ -126,9 +146,9 @@ async def get(github_id: str, repo_name: str):
         'updated_at': repo["updated_at"],
         'forks_count': repo["forks_count"],
         'stars_count': repo["stargazers_count"],
-        'commit_count': commit_count,
-        'open_issue_count': open_issues_count,
-        'closed_issue_count': closed_issues_count,
+        'commit_count': commit_counts["total_count"],
+        'open_issue_count': open_issues["total_count"],
+        'closed_issue_count': closed_issues["total_count"],
         'language': language_list,
         'contributors': contributor_logins,
         'license': repo["license"]["name"] if repo["license"] else None,
