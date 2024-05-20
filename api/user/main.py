@@ -1,49 +1,73 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, HTTPException
 from settings import *
-from fastapi import Response
 import httpx
 import json
+from datetime import datetime
 
 router = APIRouter(
     prefix="/api/user",
     tags=['/api/user'],
 )
 
-async def request(url, header):
-    r = httpx.get(url,headers=header)
-    return r.json()
+async def request(url, headers):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {'error': response.status_code, 'message': response.text}
 
 async def callGithubAPIUser(github_id):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
-    url= f'{API_URL}/users/{github_id}'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
+    
+    url = f'{API_URL}/users/{github_id}'
+    response = await request(url, headers)
+    remaining_requests -= 1  # Decrement the remaining requests count
+    json_str = json.dumps(response, indent=4, default=str)
+    respons = json.loads(json_str)
+    return respons
+        
 async def callGithubAPI(suffix_URL, github_id):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
+    response = await request(url, headers)
+    remaining_requests -= 1  # Decrement the remaining requests count
+    
+    json_str = json.dumps(response, indent=4, default=str)
+    respons = json.loads(json_str)
+    return respons
 
 # -------------------- Get all Data ------------------------------#
-@router.get('', response_class = Response)
+@router.get('', response_class=Response)
 async def get(github_id: str):
     GithubID = github_id
 
+    # Call the GitHub API and fetch user data
     student = await callGithubAPIUser(GithubID)
+
+    # Check if there is an error key in the student dictionary
+    if 'error' in student:
+        # If error is present, log it or handle accordingly, then skip further processing
+        print(f"Error encountered: {student['error']}")
+        raise HTTPException(status_code=404, detail=f"User {GithubID} not found")
     
+    # Prepare the response data dictionary
     user_item = {
         'GithubID': student['login'],
         'Follower_CNT': student['followers'],
@@ -52,10 +76,13 @@ async def get(github_id: str):
         'Github_profile_Create_Date': student['created_at'],
         'Github_profile_Update_Date': student['updated_at'],
         'email': student['email'],
-        # 'Crawled_Date': datetime.now().strftime("%Y%m%d_%H%M%S")
+        'crawled_date': datetime.now().strftime("%Y%m%d_%H%M%S")
     }
-    return response(user_item)
+
+    # Return the user data
+    return Response(content=json.dumps(user_item), media_type='application/json')
 # ---------------------------------------------------------------#
+
 
 # -------------------- Get data individually --------------------#
 @router.get('/id', response_class = Response)
@@ -64,7 +91,7 @@ async def get(github_id: str):
     item = {
         'id': userinfo["id"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/node_id', response_class = Response)
@@ -73,7 +100,7 @@ async def get(github_id: str):
     item = {
         'node_id': userinfo["node_id"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/avatar_url', response_class = Response)
@@ -82,7 +109,7 @@ async def get(github_id: str):
     item = {
         'avatar_url': userinfo["avatar_url"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/follower_list', response_class = Response)
@@ -101,8 +128,7 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return response(id_list)
-
+        return Response(content=json.dumps(id_list), media_type='application/json')
 
 @router.get('/followers', response_class = Response)
 async def get(github_id: str):
@@ -110,7 +136,7 @@ async def get(github_id: str):
     item = {
         'followers': userinfo["followers"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/following_list', response_class = Response)
@@ -129,7 +155,7 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return response(id_list)
+        return Response(content=json.dumps(id_list), media_type='application/json')
 
 
 @router.get('/following', response_class = Response)
@@ -138,7 +164,7 @@ async def get(github_id: str):
     item = {
         'following': userinfo["following"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/name', response_class = Response)
@@ -147,7 +173,7 @@ async def get(github_id: str):
     item = {
         'name': userinfo["name"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/public_repos', response_class = Response)
@@ -156,7 +182,7 @@ async def get(github_id: str):
     item = {
         'public_repos': userinfo["public_repos"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/repo_list', response_class = Response)
@@ -176,7 +202,7 @@ async def get(github_id: str):
             }
             id_list.append(user)
         page += 1
-    return response(id_list)
+        return Response(content=json.dumps(id_list), media_type='application/json')
 
 
 @router.get('/following', response_class = Response)
@@ -185,7 +211,7 @@ async def get(github_id: str):
     item = {
         'following': userinfo["following"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/public_gists', response_class = Response)
@@ -194,7 +220,7 @@ async def get(github_id: str):
     item = {
         'public_repos': userinfo["public_gists"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/created_at', response_class = Response)
@@ -203,7 +229,7 @@ async def get(github_id: str):
     item = {
         'created_at': userinfo["created_at"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 
 @router.get('/updated_at', response_class = Response)
@@ -212,7 +238,7 @@ async def get(github_id: str):
     item = {
         'created_at': userinfo["updated_at"]
     }
-    return response(item)
+    return Response(content=json.dumps(item), media_type='application/json')
 
 @router.get('/repos', response_class = Response)
 async def get(github_id: str):
@@ -232,5 +258,5 @@ async def get(github_id: str):
             }
             repos.append(user)
         page += 1
-    return response(repos)
+    return Response(content=json.dumps(repos), media_type='application/json')
 # ---------------------------------------------------------------#
