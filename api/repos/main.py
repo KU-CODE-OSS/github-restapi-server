@@ -1,8 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, HTTPException
 from settings import *
-from fastapi import Response
 import httpx
 import json
+from datetime import datetime
 
 # --- ROUTER ---#
 router = APIRouter(
@@ -11,17 +11,27 @@ router = APIRouter(
 )
 # ------------- #
 
-# --- REQUEST FUNCTIONS (API) ---#
-async def request(url, header):
-    r = httpx.get(url,headers=header)
-    return r.json()
+async def request(url, headers):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {'error': response.status_code, 'message': response.text}
+
+
 
 async def callGithubAPI(suffix_URL, github_id):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -29,11 +39,16 @@ async def callGithubAPI(suffix_URL, github_id):
     return response
 
 async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -41,11 +56,16 @@ async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
     return response
 
 async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&state={state}&page={page}&per_page=100'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -53,9 +73,13 @@ async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page):
     return response
 
 async def callGithubAPI_PULL(suffix_URL, github_id, state, page):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&state={state}&page={page}&per_page=100'
@@ -65,11 +89,16 @@ async def callGithubAPI_PULL(suffix_URL, github_id, state, page):
     return response
 
 async def callGithubAPI_COMMIT(suffix_URL, github_id, page):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&page={page}&per_page=100'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -77,11 +106,16 @@ async def callGithubAPI_COMMIT(suffix_URL, github_id, page):
     return response
 
 async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -89,11 +123,16 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     return response
 
 async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -101,11 +140,16 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
     return response
 
 async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
-    token = get_github_token()
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
     headers = {
-        'Authorization': f'token {token}',
+        'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
     url= f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
@@ -118,12 +162,14 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
 async def get(github_id: str, repo_name: str):
 
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-
+    if 'error' in repo:
+        print("Error: ", repo)
+        raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
+    
     commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=f'{repo_name}', github_id=github_id)
 
     open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="open" )
     closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="closed" )
-
 
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys())
@@ -154,10 +200,11 @@ async def get(github_id: str, repo_name: str):
         'license': repo["license"]["name"] if repo["license"] else None,
         'has_readme': has_readme,
         'description': repo["description"],
-        'release_version': release_version
+        'release_version': release_version,
+        'crawled_date': datetime.now().strftime("%Y%m%d_%H%M%S")
     }
 
-    return response(repo_item)
+    return Response(content=json.dumps(repo_item), media_type="application/json")
 #----------------------------------------------------------------#
 
 #--------------------- Get data individually --------------------#
@@ -167,7 +214,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'id': repoinfo["id"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/node_id', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -175,7 +222,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'node_id': repoinfo["node_id"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/name', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -183,7 +230,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'name': repoinfo["name"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/full_name', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -191,7 +238,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'full_name': repoinfo["full_name"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/html_url', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -199,14 +246,14 @@ async def get(github_id: str, repo_name: str):
     item = {
         'owner': repoinfo["html_url"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/owner', response_class = Response)
 async def get(github_id: str, repo_name: str):
     item = {
         'owner': github_id
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/created_at', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -214,7 +261,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'created_at': repoinfo["created_at"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/updated_at', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -222,7 +269,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'updated_at': repoinfo["updated_at"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/pushed_at', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -230,7 +277,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'pushed_at': repoinfo["pushed_at"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/clone', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -239,7 +286,7 @@ async def get(github_id: str, repo_name: str):
         'https': repoinfo["clone_url"],
         'ssh': repoinfo["ssh_url"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/stars_count', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -247,7 +294,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'stars': repoinfo["stargazers_count"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/commit_count', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -265,7 +312,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'commit_count': commit_count
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/watchers_count', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -273,7 +320,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'watchers': repoinfo["watchers"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/repo_size', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -281,7 +328,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'size': repoinfo["size"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/forks_count', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -289,7 +336,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'forks': repoinfo["forks"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/open_issues_count', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -297,7 +344,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'open_issues_count': repoinfo["open_issues_count"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/closed_issues_count', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -314,7 +361,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'closed_issues_count': closed_issues_count
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/laguages', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -325,7 +372,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'languages': language_names
     }
-    return response(item)
+    return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
 
 @router.get('/contributors', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -336,7 +383,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'contributor': contributors_names
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/license', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -344,7 +391,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'license': repoinfo["license"]["key"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/has_readme', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -357,7 +404,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'has_readme': has_readme
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/discription', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -365,7 +412,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'description' : repoinfo["description"]
     }
-    return response(item)
+    return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
 
 @router.get('/release_version', response_class=Response)
 async def get(github_id: str, repo_name: str):
@@ -378,7 +425,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'release_version': release_version
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/fork', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -387,7 +434,7 @@ async def get(github_id: str, repo_name: str):
     item = {
         'fork': repoinfo["fork"]
     }
-    return response(item)
+    return Response(content=json.dumps(item),  media_type="application/json")
 
 @router.get('/fork_users', response_class = Response)
 async def get(github_id: str, repo_name: str):
@@ -415,7 +462,7 @@ async def get(github_id: str, repo_name: str):
             }
             user_list.append(user)
         page += 1
-    return response(user_list)
+    return Response(content=json.dumps(user_list),  media_type="application/json")
 # ---------------------------------------------------------------#
 
 # -------------------- /repos/contributor ------------------------------#
@@ -423,6 +470,9 @@ async def get(github_id: str, repo_name: str):
 async def get(github_id: str, repo_name: str):
 
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
+    if 'error' in contributors:
+        print("Error: ", contributors)
+        raise HTTPException(status_code=404, detail=f"Contibutors in {repo_name} not found")
 
     contributors_list = [
         {
@@ -430,7 +480,7 @@ async def get(github_id: str, repo_name: str):
             'login': contributor["login"], 
             'contributions': contributor["contributions"]} for contributor in contributors
     ]
-    return response(contributors_list)
+    return Response(content=json.dumps(contributors_list),  media_type="application/json")
 #----------------------------------------------------------------#
 
 # -------------------- /repos/issues ------------------------------#
@@ -458,7 +508,7 @@ async def get(github_id: str, repo_name: str):
                 issues.append(issue_data)
             page += 1  
             
-    return response(issues)
+    return Response(content=json.dumps(issues),  media_type="application/json")
 #----------------------------------------------------------------#
 
 @router.get('/issues/open', response_class=Response)
@@ -482,7 +532,7 @@ async def get_issues(github_id: str, repo_name: str):
             }
             issues.append(issue_data)
         page += 1
-    return response(issues)
+    return Response(content=json.dumps(issues),  media_type="application/json")
 
 @router.get('/issues/closed', response_class=Response)
 async def get_issues(github_id: str, repo_name: str):
@@ -505,7 +555,7 @@ async def get_issues(github_id: str, repo_name: str):
             }
             issues.append(issue_data)
         page += 1
-    return response(issues)
+    return Response(content=json.dumps(issues),  media_type="application/json")
 #----------------------------------------------------------------#
 
 #-------------------- repos/pulls ------------------------------#
@@ -532,7 +582,7 @@ async def get(github_id: str, repo_name: str):
                 }
                 pulls.append(pull_data)
             page += 1  
-    return response(pulls)        
+    return Response(content=json.dumps(pulls),  media_type="application/json")        
 
 @router.get('/pulls/open', response_class=Response)
 async def get_issues(github_id: str, repo_name: str):
@@ -555,7 +605,7 @@ async def get_issues(github_id: str, repo_name: str):
             }
             pulls.append(pull_data)
         page += 1
-    return response(pulls)
+    return Response(content=json.dumps(pulls),  media_type="application/json")        
 
 @router.get('/pulls/closed', response_class=Response)
 async def get_issues(github_id: str, repo_name: str):
@@ -578,7 +628,7 @@ async def get_issues(github_id: str, repo_name: str):
             }
             pulls.append(pull_data)
         page += 1
-    return response(pulls)
+    return Response(content=json.dumps(pulls),  media_type="application/json")        
 #----------------------------------------------------------------#
 
 # -------------------- repos/commit ------------------------------#
@@ -604,5 +654,5 @@ async def get(github_id: str, repo_name: str):
             }
             commits.append(commit_data)
         page += 1
-    return response(commits)
+    return Response(content=json.dumps(commits),  media_type="application/json")        
 #-----------------------------------------------------------------#
