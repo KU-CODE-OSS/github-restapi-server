@@ -81,7 +81,7 @@ async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page, since):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&state={state}&since={since}&page={page}&per_page=100'
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&since={since}&state={state}&page={page}&per_page=100'
     return await request(url, headers)
 
 async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
@@ -109,11 +109,8 @@ async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
         'Authorization': f'token {current_token}',
         'Accept': 'application/vnd.github.v3+json',
     }
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&state={state}&since={since}page={page}&per_page=100'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
+    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&since={since}&state={state}&page={page}&per_page=100'
+    return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_COMMIT function ---#
 async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since):
@@ -128,7 +125,6 @@ async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since):
     }
 
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&since={since}&page={page}&per_page=100'
-    print(url)
     return await request(url, headers)
 
 async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):

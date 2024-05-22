@@ -36,11 +36,8 @@ async def callGithubAPIUser(github_id):
     }
     
     url = f'{API_URL}/users/{github_id}'
-    response = await request(url, headers)
-    remaining_requests -= 1  # Decrement the remaining requests count
-    json_str = json.dumps(response, indent=4, default=str)
-    respons = json.loads(json_str)
-    return respons
+    return  await request(url, headers)
+# ------------------------ # 
         
 async def callGithubAPI(suffix_URL, github_id):
     global remaining_requests, current_token
@@ -53,12 +50,7 @@ async def callGithubAPI(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
-    response = await request(url, headers)
-    remaining_requests -= 1  # Decrement the remaining requests count
-    
-    json_str = json.dumps(response, indent=4, default=str)
-    respons = json.loads(json_str)
-    return respons
+    return await request(url, headers)
 
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
