@@ -51,7 +51,7 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
+    url = f'{API_URL}/search/commits?q=&repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_CONTRIBUTOR function ---#
