@@ -10,17 +10,22 @@ router = APIRouter(
     tags=['/api/repos'],
 )
 # ------------- #
-
+#--- request function ---#
 async def request(url, headers):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
-        if response.status_code == 200:
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx, 5xx)
             return response.json()
-        else:
-            return {'error': response.status_code, 'message': response.text}
+        except httpx.TimeoutException:
+            return {'error': 408, 'message': 'Request Timeout'}
+        except httpx.HTTPStatusError as exc:
+            return {'error': exc.response.status_code, 'message': exc.response.text}
+        except Exception as e:
+            return {'error': 500, 'message': str(e)}
+# ------------------------ #
 
-
-
+# --- callGithubAPI function ---#
 async def callGithubAPI(suffix_URL, github_id):
     global remaining_requests, current_token
     
@@ -32,112 +37,8 @@ async def callGithubAPI(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&state={state}&page={page}&per_page=100'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_PULL(suffix_URL, github_id, state, page):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&state={state}&page={page}&per_page=100'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_COMMIT(suffix_URL, github_id, page):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&page={page}&per_page=100'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
-
-async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url= f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
-    result = await request(url,headers)
-    json_str = json.dumps(result, indent=4, default=str)
-    response = json.loads(json_str)
-    return response
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}'
+    return await request(url, headers)
 
 async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
     global remaining_requests, current_token
@@ -150,38 +51,131 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url= f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
+    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
+    return await request(url, headers)
+# ------------------------ #
+# --- callGithubAPI_CONTRIBUTOR function ---#
+async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors'
+    return await request(url, headers)
+# ------------------------ #
+# --- callGithubAPI_ISSUE function ---#
+async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page, since):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&state={state}&since={since}&page={page}&per_page=100'
+    return await request(url, headers)
+
+async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/search/issues?q=&repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
+    return await request(url, headers)
+# ------------------------ #
+# --- callGithubAPI_PULL function ---#
+async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+    url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&state={state}&since={since}page={page}&per_page=100'
     result = await request(url,headers)
     json_str = json.dumps(result, indent=4, default=str)
     response = json.loads(json_str)
     return response
 # ------------------------ #
+# --- callGithubAPI_COMMIT function ---#
+async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&since={since}&page={page}&per_page=100'
+    print(url)
+    return await request(url, headers)
+
+async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
+    return await request(url, headers)
+# ------------------------ #
 
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
-async def get(github_id: str, repo_name: str):
-
+async def get_repo_data(github_id: str, repo_name: str):
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
     if 'error' in repo:
-        print("Error: ", repo)
-        raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
-    
-    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=f'{repo_name}', github_id=github_id)
+        if repo['error'] == 404:
+            raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
 
-    open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="open" )
-    closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=f'{repo_name}', github_id=github_id, state="closed" )
+    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+    commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
+
+    open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
+    open_issue_count = open_issues.get("total_count", 0) if 'error' not in open_issues else 0
+
+    closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
 
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
-    language_list = list(languages.keys())
+    language_list = list(languages.keys()) if 'error' not in languages else []
 
     contributors = await callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
-    contributor_logins = [contributor['login'] for contributor in contributors]
+    contributor_logins = [contributor['login'] for contributor in contributors if 'login' in contributor] if 'error' not in contributors else []
 
     readme = await callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
-    has_readme = True if readme else False
+    has_readme = True if 'error' not in readme else False
 
     latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
-    release_version = latest_release.get('tag_name', None)
+    release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
 
     repo_item = {
         'id': repo["id"],
@@ -192,9 +186,9 @@ async def get(github_id: str, repo_name: str):
         'updated_at': repo["updated_at"],
         'forks_count': repo["forks_count"],
         'stars_count': repo["stargazers_count"],
-        'commit_count': commit_counts["total_count"],
-        'open_issue_count': open_issues["total_count"],
-        'closed_issue_count': closed_issues["total_count"],
+        'commit_count': commit_count,
+        'open_issue_count': open_issue_count,
+        'closed_issue_count': closed_issue_count,
         'language': language_list,
         'contributors': contributor_logins,
         'license': repo["license"]["name"] if repo["license"] else None,
@@ -208,251 +202,237 @@ async def get(github_id: str, repo_name: str):
 #----------------------------------------------------------------#
 
 #--------------------- Get data individually --------------------#
-@router.get('/id', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/id', response_class=Response)
+async def get_repo_id(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'id': repoinfo["id"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/node_id', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'id': repoinfo["id"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/node_id', response_class=Response)
+async def get_repo_node_id(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'node_id': repoinfo["node_id"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/name', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'node_id': repoinfo["node_id"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/name', response_class=Response)
+async def get_repo_name(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'name': repoinfo["name"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/full_name', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'name': repoinfo["name"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/full_name', response_class=Response)
+async def get_repo_full_name(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'full_name': repoinfo["full_name"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/html_url', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'full_name': repoinfo["full_name"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/html_url', response_class=Response)
+async def get_repo_html_url(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'owner': repoinfo["html_url"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/owner', response_class = Response)
-async def get(github_id: str, repo_name: str):
-    item = {
-        'owner': github_id
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'html_url': repoinfo["html_url"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/created_at', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/owner', response_class=Response)
+async def get_repo_owner(github_id: str, repo_name: str):
+    item = {'owner': github_id}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/created_at', response_class=Response)
+async def get_repo_created_at(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'created_at': repoinfo["created_at"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/updated_at', response_class = Response)
-async def get(github_id: str, repo_name: str):
-    repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'updated_at': repoinfo["updated_at"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'created_at': repoinfo["created_at"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/pushed_at', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/updated_at', response_class=Response)
+async def get_repo_updated_at(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'pushed_at': repoinfo["pushed_at"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/clone', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'updated_at': repoinfo["updated_at"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/pushed_at', response_class=Response)
+async def get_repo_pushed_at(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'pushed_at': repoinfo["pushed_at"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/clone', response_class=Response)
+async def get_repo_clone(github_id: str, repo_name: str):
+    repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
     item = {
         'https': repoinfo["clone_url"],
         'ssh': repoinfo["ssh_url"]
     }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/stars_count', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/stars_count', response_class=Response)
+async def get_repo_stars_count(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'stars': repoinfo["stargazers_count"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'stars': repoinfo["stargazers_count"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
 @router.get('/commit_count', response_class=Response)
-async def get(github_id: str, repo_name: str):
-    commit_count = 0
-    page = 1
-    while True:
-        commits = await callGithubAPI(suffix_URL=f"{repo_name}/commits?q=&page={page}&per_page=100", github_id=github_id)
-        if not commits:
-            break
-        
-        commit_count += len(commits)
-        page += 1
-        print(commit_count)
+async def get_repo_commit_count(github_id: str, repo_name: str):
 
-    item = {
-        'commit_count': commit_count
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+    commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
 
-@router.get('/watchers_count', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    return Response(content=json.dumps(commit_count), media_type="application/json")
+
+@router.get('/watchers_count', response_class=Response)
+async def get_repo_watchers_count(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'watchers': repoinfo["watchers"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/repo_size', response_class = Response)
-async def get(github_id: str, repo_name: str):
-    repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'size': repoinfo["size"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'watchers': repoinfo["watchers"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/forks_count', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/repo_size', response_class=Response)
+async def get_repo_size(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'forks': repoinfo["forks"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-@router.get('/open_issues_count', response_class = Response)
-async def get(github_id: str, repo_name: str):
+    item = {'size': repoinfo["size"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/forks_count', response_class=Response)
+async def get_repo_forks_count(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'open_issues_count': repoinfo["open_issues_count"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'forks': repoinfo["forks"]}
+    return Response(content=json.dumps(item), media_type="application/json")
+
+@router.get('/open_issues_count', response_class=Response)
+async def get_repo_open_issues_count(github_id: str, repo_name: str):
+    repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'open_issues_count': repoinfo["open_issues_count"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
 @router.get('/closed_issues_count', response_class=Response)
-async def get(github_id: str, repo_name: str):
-    closed_issues_count = 0
-    page = 1
-    while True:
-        closed_issues = await callGithubAPI(suffix_URL=f"{repo_name}/issues?state=closed&page={page}&per_page=100", github_id=github_id)
-        if not closed_issues:         
-            break
-        
-        closed_issues_count += len(closed_issues)   
-        page += 1  
+async def get_repo_closed_issues_count(github_id: str, repo_name: str):
 
-    item = {
-        'closed_issues_count': closed_issues_count
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
+    
+    return Response(content=json.dumps(closed_issue_count), media_type="application/json")
 
 @router.get('/laguages', response_class=Response)
-async def get(github_id: str, repo_name: str):
+async def get_repo_languages(github_id: str, repo_name: str):
     languages = await callGithubAPI(suffix_URL=f"{repo_name}/languages", github_id=github_id)
+    if 'error' in languages:
+        raise HTTPException(status_code=languages['error'], detail=languages['message'])
 
     language_names = list(languages.keys())
-
-    item = {
-        'languages': language_names
-    }
+    item = {'languages': language_names}
     return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
 
 @router.get('/contributors', response_class=Response)
-async def get(github_id: str, repo_name: str):
-    countributors = await callGithubAPI(suffix_URL=f"{repo_name}/contributors", github_id=github_id)
+async def get_repo_contributors(github_id: str, repo_name: str):
+    contributors = await callGithubAPI(suffix_URL=f"{repo_name}/contributors", github_id=github_id)
+    if 'error' in contributors:
+        raise HTTPException(status_code=contributors['error'], detail=contributors['message'])
 
-    contributors_names = [contributor['login'] for contributor in countributors]
-
-    item = {
-        'contributor': contributors_names
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    contributors_names = [contributor['login'] for contributor in contributors if 'login' in contributor]
+    item = {'contributor': contributors_names}
+    return Response(content=json.dumps(item), media_type="application/json")
 
 @router.get('/license', response_class=Response)
-async def get(github_id: str, repo_name: str):
+async def get_repo_license(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'license': repoinfo["license"]["key"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'license': repoinfo["license"]["key"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
 @router.get('/has_readme', response_class=Response)
-async def get(github_id: str, repo_name: str):
-    try:
-        readme_info = await callGithubAPI(suffix_URL=f"{repo_name}/readme", github_id=github_id)
-        has_readme = True if readme_info else False
-    except Exception as e:
-        has_readme = False
+async def get_repo_has_readme(github_id: str, repo_name: str):
+    readme_info = await callGithubAPI(suffix_URL=f"{repo_name}/readme", github_id=github_id)
+    has_readme = False if 'error' in readme_info else True
 
-    item = {
-        'has_readme': has_readme
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'has_readme': has_readme}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/discription', response_class=Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/description', response_class=Response)
+async def get_repo_description(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
-    item = {
-        'description' : repoinfo["description"]
-    }
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
+
+    item = {'description': repoinfo["description"]}
     return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
 
 @router.get('/release_version', response_class=Response)
-async def get(github_id: str, repo_name: str):
-    try:
-        latest_release = await callGithubAPI(suffix_URL=f"{repo_name}/releases/latest", github_id=github_id)
-        release_version = latest_release['tag_name'] if latest_release else 'No release found'
-    except Exception as e:
-        release_version = 'No release found'
+async def get_repo_release_version(github_id: str, repo_name: str):
+    latest_release = await callGithubAPI(suffix_URL=f"{repo_name}/releases/latest", github_id=github_id)
+    release_version = latest_release.get('tag_name', 'No release found') if 'error' not in latest_release else 'No release found'
 
-    item = {
-        'release_version': release_version
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'release_version': release_version}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/fork', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/fork', response_class=Response)
+async def get_repo_fork(github_id: str, repo_name: str):
     repoinfo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+    if 'error' in repoinfo:
+        raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
 
-    item = {
-        'fork': repoinfo["fork"]
-    }
-    return Response(content=json.dumps(item),  media_type="application/json")
+    item = {'fork': repoinfo["fork"]}
+    return Response(content=json.dumps(item), media_type="application/json")
 
-@router.get('/fork_users', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/fork_users', response_class=Response)
+async def get_repo_fork_users(github_id: str, repo_name: str):
     page = 1
     user_list = []
     while True:
         users = await callGithubAPI(suffix_URL=f'{repo_name}/forks?q=&page={page}&per_page=100', github_id=github_id)
-        if len(users) == 0:
+        if 'error' in users or not users:
             break
 
         for key in users:
-            d = {}
-            d['github_id'] = key['owner']['login']
-            d['id'] = key['owner']['id']
-            d['url'] = key['owner']['url']
+            d = {
+                'github_id': key['owner']['login'],
+                'id': key['owner']['id'],
+                'url': key['owner']['url']
+            }
             user = {
-                'owner' : d,
-                'id' : key['id'],
+                'owner': d,
+                'id': key['id'],
                 'name': key['name'],
                 'full_name': key['full_name'],
                 'stars': key['stargazers_count'],
@@ -462,38 +442,37 @@ async def get(github_id: str, repo_name: str):
             }
             user_list.append(user)
         page += 1
-    return Response(content=json.dumps(user_list),  media_type="application/json")
+    return Response(content=json.dumps(user_list), media_type="application/json")
 # ---------------------------------------------------------------#
 
 # -------------------- /repos/contributor ------------------------------#
-@router.get('/contributor', response_class = Response)
-async def get(github_id: str, repo_name: str):
-
+@router.get('/contributor', response_class=Response)
+async def get_repo_contributors(github_id: str, repo_name: str):
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
     if 'error' in contributors:
-        print("Error: ", contributors)
-        raise HTTPException(status_code=404, detail=f"Contibutors in {repo_name} not found")
+        raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
 
     contributors_list = [
         {
-            'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
-            'login': contributor["login"], 
-            'contributions': contributor["contributions"]} for contributor in contributors
+            'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+            'login': contributor["login"],
+            'contributions': contributor["contributions"]
+        } for contributor in contributors if 'login' in contributor and 'contributions' in contributor
     ]
-    return Response(content=json.dumps(contributors_list),  media_type="application/json")
+    return Response(content=json.dumps(contributors_list), media_type="application/json")
 #----------------------------------------------------------------#
 
 # -------------------- /repos/issues ------------------------------#
-@router.get('/issues', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/issues', response_class=Response)
+async def get_repo_issues(github_id: str, repo_name: str, since: str):
     issues = []
-    states = ['open', 'closed'] 
+    states = ['open', 'closed']
 
     for state in states:
-        page = 1  
+        page = 1
         while True:
-            issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-            if not issue_list:  
+            issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+            if 'error' in issue_list or not issue_list:
                 break
 
             for issue in issue_list:
@@ -503,156 +482,174 @@ async def get(github_id: str, repo_name: str):
                     'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'state': issue['state'],
                     'title': issue['title'],
-                    'publisher_github_id': issue['user']['login'] if issue['user'] else 'Unknown',  
+                    'publisher_github_id': issue['user']['login'] if issue['user'] else 'Unknown',
+                    'last_update': issue['created_at'],
                 }
                 issues.append(issue_data)
-            page += 1  
-            
-    return Response(content=json.dumps(issues),  media_type="application/json")
-#----------------------------------------------------------------#
+            page += 1
+
+    return Response(content=json.dumps(issues), media_type="application/json")
 
 @router.get('/issues/open', response_class=Response)
-async def get_issues(github_id: str, repo_name: str):
+async def get_open_issues(github_id: str, repo_name: str, since: str):
     page = 1
     issues = []
     state = "open"
     while True:
-        issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-        if len(issue_list) == 0:
+        issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+        if 'error' in issue_list or not issue_list:
             break
 
         for issue in issue_list:
             issue_data = {
                 'id': issue['id'],
-                'owner_github_id' : f'{github_id}',
-                'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
+                'owner_github_id': github_id,
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                 'state': issue['state'],
                 'title': issue['title'],
                 'publisher_github_id': issue['user']['login'],
+                'last_update': issue['created_at'],
             }
             issues.append(issue_data)
         page += 1
-    return Response(content=json.dumps(issues),  media_type="application/json")
+    return Response(content=json.dumps(issues), media_type="application/json")
 
 @router.get('/issues/closed', response_class=Response)
-async def get_issues(github_id: str, repo_name: str):
+async def get_closed_issues(github_id: str, repo_name: str, since: str):
     page = 1
     issues = []
     state = "closed"
     while True:
-        issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-        if len(issue_list) == 0:
+        issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+        if 'error' in issue_list or not issue_list:
             break
 
         for issue in issue_list:
             issue_data = {
                 'id': issue['id'],
-                'owner_github_id' : f'{github_id}',
-                'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
+                'owner_github_id': github_id,
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                 'state': issue['state'],
                 'title': issue['title'],
                 'publisher_github_id': issue['user']['login'],
+                'last_update': issue['created_at'],
             }
             issues.append(issue_data)
         page += 1
-    return Response(content=json.dumps(issues),  media_type="application/json")
+    return Response(content=json.dumps(issues), media_type="application/json")
 #----------------------------------------------------------------#
 
 #-------------------- repos/pulls ------------------------------#
-@router.get('/pulls', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/pulls', response_class=Response)
+async def get_repo_pulls(github_id: str, repo_name: str, since: str):
     pulls = []
-    states = ['open', 'closed'] 
+    states = ['open', 'closed']
 
     for state in states:
-        page = 1  
+        page = 1
         while True:
-            pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-            if not pull_list:  
+            pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+            if 'error' in pull_list or not pull_list:
                 break
 
             for pull in pull_list:
                 pull_data = {
                     'id': pull["id"],
-                    'owner_github_id' : f'{github_id}',
+                    'owner_github_id': github_id,
                     'state': pull["state"],
                     'title': pull["title"],
-                    'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'requester_id': pull['user']['login'],
+                    'last_update': pull['created_at'],
                 }
                 pulls.append(pull_data)
-            page += 1  
-    return Response(content=json.dumps(pulls),  media_type="application/json")        
+            page += 1
+    return Response(content=json.dumps(pulls), media_type="application/json")
 
 @router.get('/pulls/open', response_class=Response)
-async def get_issues(github_id: str, repo_name: str):
+async def get_open_pulls(github_id: str, repo_name: str, since: str):
     page = 1
     pulls = []
     state = "open"
     while True:
-        pulls_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-        if len(pulls_list) == 0:
+        pulls_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+        if 'error' in pulls_list or not pulls_list:
             break
 
         for pull in pulls_list:
             pull_data = {
                 'id': pull["id"],
-                'owner_github_id' : f'{github_id}',
+                'owner_github_id': github_id,
                 'state': pull["state"],
                 'title': pull["title"],
-                'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                 'requester_id': pull['user']['login'],
+                'last_update': pull['created_at'],
             }
             pulls.append(pull_data)
         page += 1
-    return Response(content=json.dumps(pulls),  media_type="application/json")        
+    return Response(content=json.dumps(pulls), media_type="application/json")
 
 @router.get('/pulls/closed', response_class=Response)
-async def get_issues(github_id: str, repo_name: str):
+async def get_closed_pulls(github_id: str, repo_name: str, since: str):
     page = 1
     pulls = []
     state = "closed"
     while True:
-        pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page)
-        if len(pull_list) == 0:
+        pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+        if 'error' in pull_list or not pull_list:
             break
 
         for pull in pull_list:
             pull_data = {
                 'id': pull["id"],
-                'owner_github_id' : f'{github_id}',
+                'owner_github_id': github_id,
                 'state': pull["state"],
                 'title': pull["title"],
-                'repo_url' : f'{HTML_URL}/{github_id}/{repo_name}',
-                'requester_id': pull['user']['login']
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                'requester_id': pull['user']['login'],
+                'last_update': pull['created_at'],
             }
             pulls.append(pull_data)
         page += 1
-    return Response(content=json.dumps(pulls),  media_type="application/json")        
+    return Response(content=json.dumps(pulls), media_type="application/json")
 #----------------------------------------------------------------#
 
 # -------------------- repos/commit ------------------------------#
-@router.get('/commit', response_class = Response)
-async def get(github_id: str, repo_name: str):
+@router.get('/commit', response_class=Response)
+async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
     commits = []
-    while True:
-        commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page)
-        if len(commit_list) == 0:
-            break
 
+    commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since)
+    
+    if 'error' in commit_list:
+        if commit_list['error'] == 404:
+            raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
+        else:
+            commits = []
+
+    else:
         for commit in commit_list:
-            sha = commit["sha"]
-            commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=sha)
-            commit_data = {
-                'id': sha,
-                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                'owner_github_id': github_id,
-                'committer_github_id': commit['commit']['author']['name'],  # Sometimes 'author' can be null
-                'added_lines': commit_detail['stats']['additions'],
-                'deleted_lines': commit_detail['stats']['deletions']
-            }
-            commits.append(commit_data)
-        page += 1
-    return Response(content=json.dumps(commits),  media_type="application/json")        
-#-----------------------------------------------------------------#
+            try:
+                sha = commit["sha"]
+                commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=sha)
+                commit_data = {
+                    'id': sha,
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'owner_github_id': github_id,
+                    'committer_github_id': commit['author']['login'] if commit['commit']['author'] else 'Unknown',
+                    'added_lines': commit_detail['stats']['additions'],
+                    'deleted_lines': commit_detail['stats']['deletions'],
+                    'last_update': commit['commit']['author']['date'],
+                }
+                commits.append(commit_data)
+            except KeyError as e:
+                print(f"KeyError processing commit: {e}, data: {commit}")
+            except TypeError as e:
+                print(f"TypeError processing commit: {e}, data: {commit}")
+            except Exception as e:
+                print(f"Error processing commit: {e}, data: {commit}")
+
+    return Response(content=json.dumps(commits), media_type="application/json")
+#----------------------------------------------------------------#
