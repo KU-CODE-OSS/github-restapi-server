@@ -139,6 +139,7 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     }
 
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
+    print(url)
     return await request(url, headers)
 # ------------------------ #
 
@@ -619,12 +620,13 @@ async def get_commits(github_id: str, repo_name: str, since: str):
 
     commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since)
     
-    if 'error' in commit_list:
-        if commit_list['error'] == 404:
-            raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
-        else:
-            commits = []
-
+    if not commit_list:  # 만약 commit_list가 비어 있다면
+        commits = []  # commits를 빈 리스트로 초기화
+    # if 'error' in commit_list:
+    #     if commit_list['error'] == 404:
+    #         raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
+    #     else:
+    #         commits = []
     else:
         for commit in commit_list:
             try:
@@ -634,11 +636,12 @@ async def get_commits(github_id: str, repo_name: str, since: str):
                     'id': sha,
                     'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'owner_github_id': github_id,
-                    'committer_github_id': commit['author']['login'] if commit['commit']['author'] else 'Unknown',
+                    'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
                     'added_lines': commit_detail['stats']['additions'],
                     'deleted_lines': commit_detail['stats']['deletions'],
-                    'last_update': commit['commit']['author']['date'],
+                    'last_update': commit_detail['commit']['author']['date'],
                 }
+
                 commits.append(commit_data)
             except KeyError as e:
                 print(f"KeyError processing commit: {e}, data: {commit}")
