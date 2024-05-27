@@ -113,7 +113,7 @@ async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_COMMIT function ---#
-async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since):
+async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since, per_page):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -124,7 +124,7 @@ async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&since={since}&page={page}&per_page=100'
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&since={since}&page={page}&per_page={per_page}'
     return await request(url, headers)
 
 async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
@@ -139,7 +139,6 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     }
 
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
-    print(url)
     return await request(url, headers)
 # ------------------------ #
 
@@ -446,6 +445,8 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 @router.get('/contributor', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
+    total_contributors = len(contributors) if 'error' not in contributors else 0
+
     if 'error' in contributors:
         raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
 
@@ -456,6 +457,7 @@ async def get_repo_contributors(github_id: str, repo_name: str):
             'contributions': contributor["contributions"]
         } for contributor in contributors if 'login' in contributor and 'contributions' in contributor
     ]
+    print(f'Total contributors: {total_contributors}')
     return Response(content=json.dumps(contributors_list), media_type="application/json")
 #----------------------------------------------------------------#
 
@@ -465,10 +467,15 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
     issues = []
     states = ['open', 'closed']
 
+    total_issue_count = 0
+
     for state in states:
         page = 1
         while True:
             issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+            total_issue_count += len(issue_list)
+            print(f'State: {state}')
+            print(f"Page {page}: {len(issue_list)} issue(s)")
             if 'error' in issue_list or not issue_list:
                 break
 
@@ -483,8 +490,12 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
                     'last_update': issue['created_at'],
                 }
                 issues.append(issue_data)
-            page += 1
+            
+            if len(issue_list) < 100:
+                break
 
+            page += 1
+    print(f'Total issues: {total_issue_count}')
     return Response(content=json.dumps(issues), media_type="application/json")
 
 @router.get('/issues/open', response_class=Response)
@@ -508,7 +519,12 @@ async def get_open_issues(github_id: str, repo_name: str, since: str):
                 'last_update': issue['created_at'],
             }
             issues.append(issue_data)
+
+        if len(issue_list) < 100:
+            break
+        
         page += 1
+
     return Response(content=json.dumps(issues), media_type="application/json")
 
 @router.get('/issues/closed', response_class=Response)
@@ -532,7 +548,12 @@ async def get_closed_issues(github_id: str, repo_name: str, since: str):
                 'last_update': issue['created_at'],
             }
             issues.append(issue_data)
+
+        if len(issue_list) < 100:
+            break
+
         page += 1
+
     return Response(content=json.dumps(issues), media_type="application/json")
 #----------------------------------------------------------------#
 
@@ -542,10 +563,15 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
     pulls = []
     states = ['open', 'closed']
 
+    total_pull_count = 0
+
     for state in states:
         page = 1
         while True:
             pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+            total_pull_count += len(pull_list)
+            print(f'State: {state}')
+            print(f"Page {page}: {len(pull_list)} PR(s)")
             if 'error' in pull_list or not pull_list:
                 break
 
@@ -557,10 +583,17 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
                     'title': pull["title"],
                     'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'requester_id': pull['user']['login'],
-                    'last_update': pull['created_at'],
+                    'published_date': pull['created_at'],
+                    'last_update': pull['updated_at'],
                 }
                 pulls.append(pull_data)
+
+            if len(pull_list) < 100:
+                break
+
             page += 1
+    print(f'Total pulls: {total_pull_count}')
+
     return Response(content=json.dumps(pulls), media_type="application/json")
 
 @router.get('/pulls/open', response_class=Response)
@@ -584,71 +617,53 @@ async def get_open_pulls(github_id: str, repo_name: str, since: str):
                 'last_update': pull['created_at'],
             }
             pulls.append(pull_data)
-        page += 1
-    return Response(content=json.dumps(pulls), media_type="application/json")
 
-@router.get('/pulls/closed', response_class=Response)
-async def get_closed_pulls(github_id: str, repo_name: str, since: str):
-    page = 1
-    pulls = []
-    state = "closed"
-    while True:
-        pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
-        if 'error' in pull_list or not pull_list:
+        if len(pulls_list) < 100:
             break
-
-        for pull in pull_list:
-            pull_data = {
-                'id': pull["id"],
-                'owner_github_id': github_id,
-                'state': pull["state"],
-                'title': pull["title"],
-                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                'requester_id': pull['user']['login'],
-                'last_update': pull['created_at'],
-            }
-            pulls.append(pull_data)
+        
         page += 1
-    return Response(content=json.dumps(pulls), media_type="application/json")
-#----------------------------------------------------------------#
 
-# -------------------- repos/commit ------------------------------#
+    return Response(content=json.dumps(pulls), media_type="application/json")
+
+#-------------------- repos/commits ------------------------------#
 @router.get('/commit', response_class=Response)
 async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
     commits = []
+    per_page = 100  
 
-    commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since)
+    total_commit_count = 0
     
-    if not commit_list:  # 만약 commit_list가 비어 있다면
-        commits = []  # commits를 빈 리스트로 초기화
-    # if 'error' in commit_list:
-    #     if commit_list['error'] == 404:
-    #         raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
-    #     else:
-    #         commits = []
-    else:
-        for commit in commit_list:
-            try:
-                sha = commit["sha"]
-                commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=sha)
-                commit_data = {
-                    'id': sha,
-                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                    'owner_github_id': github_id,
-                    'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
-                    'added_lines': commit_detail['stats']['additions'],
-                    'deleted_lines': commit_detail['stats']['deletions'],
-                    'last_update': commit_detail['commit']['author']['date'],
-                }
+    while True:
+        commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
+        total_commit_count += len(commit_list)
+        print(f"Page {page}: {len(commit_list)} commit(s)")
 
-                commits.append(commit_data)
-            except KeyError as e:
-                print(f"KeyError processing commit: {e}, data: {commit}")
-            except TypeError as e:
-                print(f"TypeError processing commit: {e}, data: {commit}")
-            except Exception as e:
-                print(f"Error processing commit: {e}, data: {commit}")
+        if 'error' in commit_list or not commit_list:
+            break
+        
+        for commit in commit_list:
+            sha = commit["sha"]
+            commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
+            if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
+                raise ValueError(f"Missing keys in commit_detail: {commit_detail}")
+            
+            commit_data = {
+                'sha': sha,
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                'owner_github_id': github_id,
+                'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
+                'added_lines': commit_detail['stats'].get('additions', 0),
+                'deleted_lines': commit_detail['stats'].get('deletions', 0),
+                'last_update': commit_detail['commit']['author'].get('date', 'Unknown'),
+            }
+            commits.append(commit_data)
+
+        if len(commit_list) < per_page:
+            break
+
+        page += 1
+
+    print(f'Total commits: {total_commit_count}')
 
     return Response(content=json.dumps(commits), media_type="application/json")
-#----------------------------------------------------------------#

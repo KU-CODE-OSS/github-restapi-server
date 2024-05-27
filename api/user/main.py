@@ -241,7 +241,6 @@ async def get(github_id: str):
 
 @router.get('/repos', response_class = Response)
 async def get(github_id: str):
-
     page = 1
     repos = []
     while True:
@@ -249,13 +248,14 @@ async def get(github_id: str):
         if len(repo_list) == 0:
             break
 
-        for key in repo_list:
-            user = {
-                'id': key['id'],
-                'name' : key['name'],
-                'full_name' : key['full_name']
-            }
-            repos.append(user)
+        for repo in repo_list:
+            if repo['fork'] == False and repo['private'] == False:
+                user = {
+                    'id': repo['id'],
+                    'name' : repo['name'],
+                    'full_name' : repo['full_name'],
+                }
+                repos.append(user)
         page += 1
     return Response(content=json.dumps(repos), media_type='application/json')
 # ---------------------------------------------------------------#
