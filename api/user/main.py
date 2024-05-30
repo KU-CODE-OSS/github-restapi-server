@@ -50,6 +50,7 @@ async def callGithubAPI(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
+    
     return await request(url, headers)
 
 # -------------------- Get all Data ------------------------------#
@@ -116,7 +117,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        follower_list = await callGithubAPI(f'followers?q=&page={page}&per_page=100', github_id=github_id)
+        follower_list = await callGithubAPI(f'followers?q=page={page}&per_page=100', github_id=github_id)
         if len(follower_list) == 0:
             break
 
@@ -143,7 +144,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        following_list = await callGithubAPI(f'following?q=&page={page}&per_page=100', github_id=github_id)
+        following_list = await callGithubAPI(f'following?q=page={page}&per_page=100', github_id=github_id)
         if len(following_list) == 0:
             break
 
@@ -189,7 +190,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
+        repo_list = await callGithubAPI(f'repos?q=page={page}&per_page=100', github_id=github_id)
         if len(repo_list) == 0:
             break
 
@@ -239,23 +240,29 @@ async def get(github_id: str):
     }
     return Response(content=json.dumps(item), media_type='application/json')
 
-@router.get('/repos', response_class = Response)
+@router.get('/repos', response_class=Response)
 async def get(github_id: str):
     page = 1
     repos = []
+    per_page = 100
+    
     while True:
-        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
-        if len(repo_list) == 0:
+        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page={per_page}', github_id=github_id)
+        if not repo_list:
             break
 
         for repo in repo_list:
-            if repo['fork'] == False and repo['private'] == False:
+            if not repo['fork'] and not repo['private']:
                 user = {
                     'id': repo['id'],
-                    'name' : repo['name'],
-                    'full_name' : repo['full_name'],
+                    'name': repo['name'],
+                    'full_name': repo['full_name'],
                 }
                 repos.append(user)
+        
+        if len(repo_list) < per_page:
+            break
+
         page += 1
+
     return Response(content=json.dumps(repos), media_type='application/json')
-# ---------------------------------------------------------------#

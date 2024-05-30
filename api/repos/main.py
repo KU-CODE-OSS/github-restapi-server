@@ -51,7 +51,7 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/commits?q=&repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
+    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08'
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_CONTRIBUTOR function ---#
@@ -95,7 +95,7 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/issues?q=&repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
+    url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_PULL function ---#
@@ -416,7 +416,7 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
     page = 1
     user_list = []
     while True:
-        users = await callGithubAPI(suffix_URL=f'{repo_name}/forks?q=&page={page}&per_page=100', github_id=github_id)
+        users = await callGithubAPI(suffix_URL=f'{repo_name}/forks?q=page={page}&per_page=100', github_id=github_id)
         if 'error' in users or not users:
             break
 
@@ -457,7 +457,6 @@ async def get_repo_contributors(github_id: str, repo_name: str):
             'contributions': contributor["contributions"]
         } for contributor in contributors if 'login' in contributor and 'contributions' in contributor
     ]
-    print(f'Total contributors: {total_contributors}')
     return Response(content=json.dumps(contributors_list), media_type="application/json")
 #----------------------------------------------------------------#
 
@@ -640,13 +639,17 @@ async def get_commits(github_id: str, repo_name: str, since: str):
         print(f"Page {page}: {len(commit_list)} commit(s)")
 
         if 'error' in commit_list or not commit_list:
+            commits = []
             break
         
         for commit in commit_list:
             sha = commit["sha"]
             commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
             if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
-                raise ValueError(f"Missing keys in commit_detail: {commit_detail}")
+                commit_detail = {
+                    'stats': {'additions': 0, 'deletions': 0},
+                    'commit': {'author': {'date': 'Unknown'}}
+                }
             
             commit_data = {
                 'sha': sha,
