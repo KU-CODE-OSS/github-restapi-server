@@ -3,6 +3,7 @@ from settings import *
 import httpx
 import json
 from datetime import datetime
+from asyncio import gather
 
 # --- ROUTER ---#
 router = APIRouter(
@@ -51,7 +52,7 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>2008-02-08T00:00:00Z'
+    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08T00:00:00Z'
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_CONTRIBUTOR function ---#
@@ -143,7 +144,6 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 # ------------------------ #
 
 # -------------------- Get all Data ------------------------------#
-@router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_name: str):
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
     if 'error' in repo:
@@ -152,25 +152,24 @@ async def get_repo_data(github_id: str, repo_name: str):
         else:
             raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
 
-    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+    commit_counts_task = callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+    open_issues_task = callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
+    closed_issues_task = callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    languages_task = callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
+    contributors_task = callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
+    readme_task = callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
+    latest_release_task = callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
+
+    commit_counts, open_issues, closed_issues, languages, contributors, readme, latest_release = await gather(
+        commit_counts_task, open_issues_task, closed_issues_task, languages_task, contributors_task, readme_task, latest_release_task
+    )
+
     commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
-
-    open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
     open_issue_count = open_issues.get("total_count", 0) if 'error' not in open_issues else 0
-
-    closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
     closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
-
-    languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
-
-    contributors = await callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
     contributor_logins = [contributor['login'] for contributor in contributors if 'login' in contributor] if 'error' not in contributors else []
-
-    readme = await callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
     has_readme = True if 'error' not in readme else False
-
-    latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
     release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
 
     repo_item = {
@@ -195,6 +194,7 @@ async def get_repo_data(github_id: str, repo_name: str):
     }
 
     return Response(content=json.dumps(repo_item), media_type="application/json")
+
 #----------------------------------------------------------------#
 
 #--------------------- Get data individually --------------------#
@@ -445,7 +445,6 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 @router.get('/contributor', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
-    total_contributors = len(contributors) if 'error' not in contributors else 0
 
     if 'error' in contributors:
         raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
