@@ -453,7 +453,6 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 @router.get('/contributor', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
-    total_contributors = len(contributors) if 'error' not in contributors else 0
 
     if 'error' in contributors:
         raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
@@ -479,6 +478,7 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
     for state in states:
         page = 1
         while True:
+            await asyncio.sleep(REQ_DELAY)
             issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
             total_issue_count += len(issue_list)
             print(f'State: {state}')
@@ -575,6 +575,7 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
     for state in states:
         page = 1
         while True:
+            await asyncio.sleep(REQ_DELAY)
             pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
             total_pull_count += len(pull_list)
             print(f'State: {state}')
@@ -609,6 +610,7 @@ async def get_open_pulls(github_id: str, repo_name: str, since: str):
     pulls = []
     state = "open"
     while True:
+        await asyncio.sleep(REQ_DELAY)
         pulls_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
         if 'error' in pulls_list or not pulls_list:
             break
@@ -652,6 +654,7 @@ async def get_commits(github_id: str, repo_name: str, since: str):
         
         for commit in commit_list:
             sha = commit["sha"]
+            await asyncio.sleep(REQ_DELAY)
             commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
             if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
                 commit_detail = {
