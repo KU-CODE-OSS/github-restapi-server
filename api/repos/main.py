@@ -200,7 +200,7 @@ async def get_repo_data(github_id: str, repo_name: str):
         'has_readme': has_readme,
         'description': repo["description"],
         'release_version': release_version,
-        'crawled_date': datetime.now().strftime("%Y%m%d_%H%M%S")
+        'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
     return Response(content=json.dumps(repo_item), media_type="application/json")
@@ -452,6 +452,7 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 # -------------------- /repos/contributor ------------------------------#
 @router.get('/contributor', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
+    await asyncio.sleep(REQ_DELAY)
     contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
 
     if 'error' in contributors:
