@@ -159,6 +159,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# TOKENS
 GITHUB_TOKEN
-OS_GITHUB_INFO_0521.csv
-api_user_repo_test.py

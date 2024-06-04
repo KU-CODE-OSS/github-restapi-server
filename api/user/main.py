@@ -76,7 +76,7 @@ async def get(github_id: str):
         'Github_profile_Create_Date': student['created_at'],
         'Github_profile_Update_Date': student['updated_at'],
         'email': student['email'],
-        'crawled_date': datetime.now().strftime("%Y%m%d_%H%M%S")
+        'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
     # Return the user data
