@@ -1,7 +1,7 @@
 # github-restapi-server
 ## prerequisite
 ```
-pip3 install virtualbox
+pip3 install virtualenv
 ```
 ### CREATE GITHUB_TOKEN file and Add AUTH TOKEN
 
