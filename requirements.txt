@@ -26,6 +26,7 @@ pydantic==2.6.4
 pydantic_core==2.16.3
 pyOpenSSL==24.1.0
 requests==2.32.0
+requests==2.31.0
 requests-file==2.0.0
 service-identity==24.1.0
 six==1.16.0
@@ -35,4 +36,5 @@ tldextract==5.1.2
 typing_extensions==4.10.0
 urllib3==2.2.1
 uvicorn==0.29.0
+zope.interface==6.2
 zope.interface==6.2
