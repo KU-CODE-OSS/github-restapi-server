@@ -9,13 +9,20 @@ router = APIRouter(
     tags=['/api/user'],
 )
 
+#--- request function ---#
 async def request(url, headers):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
-        if response.status_code == 200:
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx, 5xx)
             return response.json()
-        else:
-            return {'error': response.status_code, 'message': response.text}
+        except httpx.TimeoutException:
+            return {'error': 408, 'message': 'Request Timeout'}
+        except httpx.HTTPStatusError as exc:
+            return {'error': exc.response.status_code, 'message': exc.response.text}
+        except Exception as e:
+            return {'error': 500, 'message': str(e)}
+# ------------------------ #
 
 async def callGithubAPIUser(github_id):
     global remaining_requests, current_token
@@ -29,11 +36,8 @@ async def callGithubAPIUser(github_id):
     }
     
     url = f'{API_URL}/users/{github_id}'
-    response = await request(url, headers)
-    remaining_requests -= 1  # Decrement the remaining requests count
-    json_str = json.dumps(response, indent=4, default=str)
-    respons = json.loads(json_str)
-    return respons
+    return  await request(url, headers)
+# ------------------------ # 
         
 async def callGithubAPI(suffix_URL, github_id):
     global remaining_requests, current_token
@@ -46,12 +50,8 @@ async def callGithubAPI(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
-    response = await request(url, headers)
-    remaining_requests -= 1  # Decrement the remaining requests count
     
-    json_str = json.dumps(response, indent=4, default=str)
-    respons = json.loads(json_str)
-    return respons
+    return await request(url, headers)
 
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
@@ -76,7 +76,7 @@ async def get(github_id: str):
         'Github_profile_Create_Date': student['created_at'],
         'Github_profile_Update_Date': student['updated_at'],
         'email': student['email'],
-        'crawled_date': datetime.now().strftime("%Y%m%d_%H%M%S")
+        'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
     # Return the user data
@@ -117,7 +117,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        follower_list = await callGithubAPI(f'followers?q=&page={page}&per_page=100', github_id=github_id)
+        follower_list = await callGithubAPI(f'followers?q=page={page}&per_page=100', github_id=github_id)
         if len(follower_list) == 0:
             break
 
@@ -144,7 +144,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        following_list = await callGithubAPI(f'following?q=&page={page}&per_page=100', github_id=github_id)
+        following_list = await callGithubAPI(f'following?q=page={page}&per_page=100', github_id=github_id)
         if len(following_list) == 0:
             break
 
@@ -190,7 +190,7 @@ async def get(github_id: str):
     page = 1
     id_list = []
     while True:
-        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
+        repo_list = await callGithubAPI(f'repos?q=page={page}&per_page=100', github_id=github_id)
         if len(repo_list) == 0:
             break
 
@@ -240,23 +240,29 @@ async def get(github_id: str):
     }
     return Response(content=json.dumps(item), media_type='application/json')
 
-@router.get('/repos', response_class = Response)
+@router.get('/repos', response_class=Response)
 async def get(github_id: str):
-
     page = 1
     repos = []
+    per_page = 100
+    
     while True:
-        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page=100', github_id=github_id)
-        if len(repo_list) == 0:
+        repo_list = await callGithubAPI(f'repos?q=&page={page}&per_page={per_page}', github_id=github_id)
+        if not repo_list:
             break
 
-        for key in repo_list:
-            user = {
-                'id': key['id'],
-                'name' : key['name'],
-                'full_name' : key['full_name']
-            }
-            repos.append(user)
+        for repo in repo_list:
+            if not repo['fork'] and not repo['private']:
+                user = {
+                    'id': repo['id'],
+                    'name': repo['name'],
+                    'full_name': repo['full_name'],
+                }
+                repos.append(user)
+        
+        if len(repo_list) < per_page:
+            break
+
         page += 1
+
     return Response(content=json.dumps(repos), media_type='application/json')
-# ---------------------------------------------------------------#
