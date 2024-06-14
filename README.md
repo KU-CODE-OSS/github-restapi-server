@@ -17,7 +17,10 @@ source {venv_name}/bin/activate
 pip3 install -r requirements.txt
 ```
 
+## MAKE GITHUB_TOKEN file and put Auth Token
+
 ## Start FASTAPI Server
 ```
 uvicorn main:app --reload --host 0.0.0.0 --port 5000 --timeout-keep-alive 30
 ```
+
