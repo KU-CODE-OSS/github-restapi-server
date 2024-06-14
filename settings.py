@@ -7,7 +7,7 @@ GITHUB_TOKEN_FILE = 'GITHUB_TOKEN'
 remaining_requests = 0
 current_token = None
 TIMEOUT = 3600
-REQ_DELAY = 0.2
+REQ_DELAY = 0.1
 
 async def get_github_tokens():
     with open(GITHUB_TOKEN_FILE, 'r') as file:

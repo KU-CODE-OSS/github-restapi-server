@@ -4,6 +4,8 @@ import httpx
 import json
 from datetime import datetime
 
+import time
+
 router = APIRouter(
     prefix="/api/user",
     tags=['/api/user'],
@@ -54,12 +56,15 @@ async def callGithubAPI(suffix_URL, github_id):
     return await request(url, headers)
 
 # -------------------- Get all Data ------------------------------#
-@router.get('', response_class=Response)
 async def get(github_id: str):
+    start_time = time.time()
     GithubID = github_id
 
     # Call the GitHub API and fetch user data
     student = await callGithubAPIUser(GithubID)
+
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for fetching user data: {elapsed_time:.2f} seconds")
 
     # Check if there is an error key in the student dictionary
     if 'error' in student:
@@ -78,6 +83,9 @@ async def get(github_id: str):
         'email': student['email'],
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
+
+    total_elapsed_time = time.time() - start_time
+    print(f"Total time elapsed: {total_elapsed_time:.2f} seconds")
 
     # Return the user data
     return Response(content=json.dumps(user_item), media_type='application/json')

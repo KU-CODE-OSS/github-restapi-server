@@ -5,6 +5,8 @@ import json
 from datetime import datetime
 import asyncio
 
+import time
+
 # --- ROUTER ---#
 router = APIRouter(
     prefix="/api/repos",
@@ -142,10 +144,12 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits/{sha}'
     return await request(url, headers)
 # ------------------------ #
-
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_name: str):
+    start_time = time.time()
+    total_sleep_time = 0
+
     repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
     if 'error' in repo:
         if repo['error'] == 404:
@@ -153,34 +157,64 @@ async def get_repo_data(github_id: str, repo_name: str):
         else:
             raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
 
-    # Add delay between requests
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for repo: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
     commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for commit counts: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
     open_issue_count = open_issues.get("total_count", 0) if 'error' not in open_issues else 0
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for open issues: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
     closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for closed issues: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for languages: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     contributors = await callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
     contributor_logins = [contributor['login'] for contributor in contributors if 'login' in contributor] if 'error' not in contributors else []
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for contributors: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     readme = await callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
     has_readme = True if 'error' not in readme else False
 
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for readme: {elapsed_time:.2f} seconds")
+
     await asyncio.sleep(REQ_DELAY)
+    total_sleep_time += REQ_DELAY
     latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
     release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
+
+    elapsed_time = time.time() - start_time
+    print(f"Time elapsed for latest release: {elapsed_time:.2f} seconds")
 
     repo_item = {
         'id': repo["id"],
@@ -203,8 +237,11 @@ async def get_repo_data(github_id: str, repo_name: str):
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
-    return Response(content=json.dumps(repo_item), media_type="application/json")
+    total_elapsed_time = time.time() - start_time
+    print(f"Total time elapsed: {total_elapsed_time:.2f} seconds")
+    print(f"Total sleep time: {total_sleep_time:.2f} seconds")
 
+    return Response(content=json.dumps(repo_item), media_type="application/json")
 #--------------------- Get data individually --------------------#
 @router.get('/id', response_class=Response)
 async def get_repo_id(github_id: str, repo_name: str):
@@ -475,15 +512,21 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
     states = ['open', 'closed']
 
     total_issue_count = 0
+    total_sleep_time = 0
 
     for state in states:
         page = 1
         while True:
+            start_time = time.time()
+
             await asyncio.sleep(REQ_DELAY)
+            total_sleep_time += REQ_DELAY
             issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
             total_issue_count += len(issue_list)
-            print(f'State: {state}')
-            print(f"Page {page}: {len(issue_list)} issue(s)")
+
+            elapsed_time = time.time() - start_time
+            print(f"State: {state}, Page: {page}, Issues: {len(issue_list)}, Time elapsed: {elapsed_time:.2f} seconds")
+
             if 'error' in issue_list or not issue_list:
                 break
 
@@ -491,7 +534,7 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
                 issue_data = {
                     'id': issue['id'],
                     'owner_github_id': github_id,
-                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'repo_url': f'https://github.com/{github_id}/{repo_name}',
                     'state': issue['state'],
                     'title': issue['title'],
                     'publisher_github_id': issue['user']['login'] if issue['user'] else 'Unknown',
@@ -503,9 +546,13 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
                 break
 
             page += 1
-    print(f'Total issues: {total_issue_count}')
-    return Response(content=json.dumps(issues), media_type="application/json")
 
+    total_elapsed_time = time.time() - start_time
+    print(f"Total issues: {total_issue_count}, Total time elapsed: {total_elapsed_time:.2f} seconds, Total sleep time: {total_sleep_time:.2f} seconds")
+
+    return Response(content=json.dumps(issues), media_type="application/json")
+#----------------------------------------------------------------#
+#-------------------- repos/issues/open ------------------------------#
 @router.get('/issues/open', response_class=Response)
 async def get_open_issues(github_id: str, repo_name: str, since: str):
     page = 1
@@ -572,15 +619,21 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
     states = ['open', 'closed']
 
     total_pull_count = 0
+    total_sleep_time = 0
 
     for state in states:
         page = 1
         while True:
+            start_time = time.time()
+
             await asyncio.sleep(REQ_DELAY)
+            total_sleep_time += REQ_DELAY
             pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
             total_pull_count += len(pull_list)
-            print(f'State: {state}')
-            print(f"Page {page}: {len(pull_list)} PR(s)")
+
+            elapsed_time = time.time() - start_time
+            print(f"State: {state}, Page: {page}, Pull Requests: {len(pull_list)}, Time elapsed: {elapsed_time:.2f} seconds")
+
             if 'error' in pull_list or not pull_list:
                 break
 
@@ -590,7 +643,7 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
                     'owner_github_id': github_id,
                     'state': pull["state"],
                     'title': pull["title"],
-                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'repo_url': f'https://github.com/{github_id}/{repo_name}',
                     'requester_id': pull['user']['login'],
                     'published_date': pull['created_at'],
                     'last_update': pull['updated_at'],
@@ -601,10 +654,14 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
                 break
 
             page += 1
-    print(f'Total pulls: {total_pull_count}')
+
+    total_elapsed_time = time.time() - start_time
+    print(f"Total pull requests: {total_pull_count}, Total time elapsed: {total_elapsed_time:.2f} seconds, Total sleep time: {total_sleep_time:.2f} seconds")
 
     return Response(content=json.dumps(pulls), media_type="application/json")
+#----------------------------------------------------------------#
 
+#-------------------- repos/pulls/open ------------------------------#
 @router.get('/pulls/open', response_class=Response)
 async def get_open_pulls(github_id: str, repo_name: str, since: str):
     page = 1
@@ -643,11 +700,18 @@ async def get_commits(github_id: str, repo_name: str, since: str):
     per_page = 100  
 
     total_commit_count = 0
+    total_sleep_time = 0
+    total_time_for_all_commits = 0
     
     while True:
+        start_time_list = time.time()
+
         commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
         total_commit_count += len(commit_list)
-        print(f"Page {page}: {len(commit_list)} commit(s)")
+
+        elapsed_time_for_list = time.time() - start_time_list
+        total_time_for_all_commits += elapsed_time_for_list
+        print(f"Page {page}: {len(commit_list)} commit(s), Time elapsed: {elapsed_time_for_list:.2f} seconds")
 
         if 'error' in commit_list or not commit_list:
             commits = []
@@ -655,8 +719,13 @@ async def get_commits(github_id: str, repo_name: str, since: str):
         
         for commit in commit_list:
             sha = commit["sha"]
+            start_time_commit = time.time()
+
             await asyncio.sleep(REQ_DELAY)
+            total_sleep_time += REQ_DELAY
             commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
+            elapsed_time_commit = time.time() - start_time_commit
+
             if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
                 commit_detail = {
                     'stats': {'additions': 0, 'deletions': 0},
@@ -665,7 +734,7 @@ async def get_commits(github_id: str, repo_name: str, since: str):
             
             commit_data = {
                 'sha': sha,
-                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                'repo_url': f'https://github.com/{github_id}/{repo_name}',
                 'owner_github_id': github_id,
                 'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
                 'added_lines': commit_detail['stats'].get('additions', 0),
@@ -674,11 +743,15 @@ async def get_commits(github_id: str, repo_name: str, since: str):
             }
             commits.append(commit_data)
 
+            print(f"Commit {sha}: Time elapsed: {elapsed_time_commit:.2f} seconds")
+
         if len(commit_list) < per_page:
             break
 
         page += 1
 
-    print(f'Total commits: {total_commit_count}')
+    total_elapsed_time = time.time() - start_time_list
+    average_commit_time = total_time_for_all_commits / total_commit_count if total_commit_count > 0 else 0
+    print(f"Total commits: {total_commit_count}, Total time elapsed: {total_elapsed_time:.2f} seconds, Total sleep time: {total_sleep_time:.2f} seconds, Average time per commit: {average_commit_time:.2f} seconds")
 
     return Response(content=json.dumps(commits), media_type="application/json")
