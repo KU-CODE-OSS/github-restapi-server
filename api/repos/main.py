@@ -98,6 +98,22 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
 
     url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
     return await request(url, headers)
+
+async def callGithubAPI_PULLS_COUNT(suffix_URL, github_id, state):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:pr+state:{state}'
+    return await request(url, headers)
+
+
 # ------------------------ #
 # --- callGithubAPI_PULL function ---#
 async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
@@ -167,6 +183,14 @@ async def get_repo_data(github_id: str, repo_name: str):
     closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
 
     await asyncio.sleep(REQ_DELAY)
+    open_prs = await callGithubAPI_PULLS_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
+    open_pr_count = open_prs.get("total_count", 0) if 'error' not in open_prs else 0
+
+    await asyncio.sleep(REQ_DELAY)
+    closed_prs = await callGithubAPI_PULLS_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    closed_pr_count = closed_prs.get("total_count", 0) if 'error' not in closed_prs else 0
+
+    await asyncio.sleep(REQ_DELAY)
     languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
@@ -194,6 +218,8 @@ async def get_repo_data(github_id: str, repo_name: str):
         'commit_count': commit_count,
         'open_issue_count': open_issue_count,
         'closed_issue_count': closed_issue_count,
+        'open_pr_count': open_pr_count,
+        'closed_pr_count': closed_pr_count,
         'language': language_list,
         'contributors': contributor_logins,
         'license': repo["license"]["name"] if repo["license"] else None,
