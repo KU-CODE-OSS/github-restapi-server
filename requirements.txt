@@ -36,3 +36,4 @@ typing_extensions==4.10.0
 urllib3==2.2.1
 uvicorn==0.29.0
 zope.interface==6.2
+zope.interface==6.2
