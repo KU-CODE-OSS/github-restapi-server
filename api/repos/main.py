@@ -27,7 +27,21 @@ async def request(url, headers):
 # ------------------------ #
 
 # --- callGithubAPI function ---#
-async def callGithubAPI(suffix_URL, github_id):
+async def callGithubAPI(repo_id):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repositories/{repo_id}'
+    return await request(url, headers)
+
+async def callGithubAPI_DETAIL(suffix_URL, github_id):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -161,13 +175,15 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
-async def get_repo_data(github_id: str, repo_name: str):
-    repo = await callGithubAPI(suffix_URL=repo_name, github_id=github_id)
+async def get_repo_data(github_id: str, repo_id: str):
+    repo = await callGithubAPI(repo_id=repo_id)
     if 'error' in repo:
         if repo['error'] == 404:
-            raise HTTPException(status_code=404, detail=f"Repository {repo_name} not found")
+            raise HTTPException(status_code=404, detail=f"Repository {repo_id} not found")
         else:
             raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
+
+    repo_name = repo["name"]
 
     # Add delay between requests
     await asyncio.sleep(REQ_DELAY)
@@ -191,19 +207,19 @@ async def get_repo_data(github_id: str, repo_name: str):
     closed_pr_count = closed_prs.get("total_count", 0) if 'error' not in closed_prs else 0
 
     await asyncio.sleep(REQ_DELAY)
-    languages = await callGithubAPI(suffix_URL=f'{repo_name}/languages', github_id=github_id)
+    languages = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
     await asyncio.sleep(REQ_DELAY)
-    contributors = await callGithubAPI(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
+    contributors = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
     contributor_logins = [contributor['login'] for contributor in contributors if 'login' in contributor] if 'error' not in contributors else []
 
     await asyncio.sleep(REQ_DELAY)
-    readme = await callGithubAPI(suffix_URL=f'{repo_name}/readme', github_id=github_id)
+    readme = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/readme', github_id=github_id)
     has_readme = True if 'error' not in readme else False
 
     await asyncio.sleep(REQ_DELAY)
-    latest_release = await callGithubAPI(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
+    latest_release = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
     release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
 
     repo_item = {

@@ -252,7 +252,7 @@ async def get(github_id: str):
             break
 
         for repo in repo_list:
-            if not repo['fork'] and not repo['private']:
+            if not repo['private']:
                 user = {
                     'id': repo['id'],
                     'name': repo['name'],
