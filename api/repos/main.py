@@ -229,6 +229,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'owner_github_id': repo["owner"]["login"],
         'created_at': repo["created_at"],
         'updated_at': repo["updated_at"],
+        'forked' : repo['fork'],
         'forks_count': repo["forks_count"],
         'stars_count': repo["stargazers_count"],
         'commit_count': commit_count,
@@ -678,49 +679,57 @@ async def get_open_pulls(github_id: str, repo_name: str, since: str):
     return Response(content=json.dumps(pulls), media_type="application/json")
 
 #-------------------- repos/commits ------------------------------#
+from fastapi import HTTPException, Response
+
 @router.get('/commit', response_class=Response)
 async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
     commits = []
     per_page = 100  
-
+    max_pages = 20
     total_commit_count = 0
-    
-    while True:
-        commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
-        total_commit_count += len(commit_list)
-        print(f"Page {page}: {len(commit_list)} commit(s)")
 
-        if 'error' in commit_list or not commit_list:
-            commits = []
-            break
-        
-        for commit in commit_list:
-            sha = commit["sha"]
-            await asyncio.sleep(REQ_DELAY)
-            commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
-            if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
-                commit_detail = {
-                    'stats': {'additions': 0, 'deletions': 0},
-                    'commit': {'author': {'date': 'Unknown'}}
+    try:
+        while page <= max_pages:
+            commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
+            if 'error' in commit_list or not commit_list:
+                break
+
+            total_commit_count += len(commit_list)
+            print(f"Page {page}: {len(commit_list)} commit(s)")
+
+            for commit in commit_list:
+                sha = commit["sha"]
+                await asyncio.sleep(REQ_DELAY)
+                commit_detail = await callGithubAPI_COMMIT_DETAIL(suffix_URL=repo_name, github_id=github_id, sha=commit["sha"])
+                if 'stats' not in commit_detail or 'commit' not in commit_detail or 'author' not in commit_detail['commit']:
+                    commit_detail = {
+                        'stats': {'additions': 0, 'deletions': 0},
+                        'commit': {'author': {'date': 'Unknown'}}
+                    }
+
+                commit_data = {
+                    'sha': sha,
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'owner_github_id': github_id,
+                    'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
+                    'added_lines': commit_detail['stats'].get('additions', 0),
+                    'deleted_lines': commit_detail['stats'].get('deletions', 0),
+                    'last_update': commit_detail['commit']['author'].get('date', 'Unknown'),
                 }
-            
-            commit_data = {
-                'sha': sha,
-                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                'owner_github_id': github_id,
-                'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
-                'added_lines': commit_detail['stats'].get('additions', 0),
-                'deleted_lines': commit_detail['stats'].get('deletions', 0),
-                'last_update': commit_detail['commit']['author'].get('date', 'Unknown'),
-            }
-            commits.append(commit_data)
+                commits.append(commit_data)
 
-        if len(commit_list) < per_page:
-            break
+            if len(commit_list) < per_page:
+                break
 
-        page += 1
+            page += 1
 
-    print(f'Total commits: {total_commit_count}')
+        print(f'Total commits: {total_commit_count}')
+        return Response(content=json.dumps(commits), media_type="application/json")
 
-    return Response(content=json.dumps(commits), media_type="application/json")
+    except Exception as e:
+        print(f"Error: {e}")
+        if commits:
+            return Response(content=json.dumps(commits), media_type="application/json")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to fetch commits due to token exhaustion or other error.")
