@@ -70,7 +70,7 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_CONTRIBUTOR function ---#
-async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
+async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id, page):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -81,7 +81,7 @@ async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors'
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors?q=&page={page}&per_page=100'
     return await request(url, headers)
 # ------------------------ #
 # --- callGithubAPI_ISSUE function ---#
@@ -493,22 +493,40 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 # ---------------------------------------------------------------#
 
 # -------------------- /repos/contributor ------------------------------#
-@router.get('/contributor', response_class=Response)
+@router.get('/contributors', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
-    await asyncio.sleep(REQ_DELAY)
-    contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
+    contributors_list = []
+    page = 1
+    total_contributors_count = 0
 
-    if 'error' in contributors:
-        raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
+    while True:
+        await asyncio.sleep(REQ_DELAY)
+        contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
 
-    contributors_list = [
-        {
-            'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-            'login': contributor["login"],
-            'contributions': contributor["contributions"]
-        } for contributor in contributors if 'login' in contributor and 'contributions' in contributor
-    ]
+        if 'error' in contributors:
+            raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
+        
+        total_contributors_count += len(contributors)
+        print(f"Page {page}: {len(contributors)} contributor(s)")
+
+        for contributor in contributors:
+            if 'login' in contributor and 'contributions' in contributor:
+                contributor_data = {
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'login': contributor["login"],
+                    'contributions': contributor["contributions"]
+                }
+                contributors_list.append(contributor_data)
+
+        # If fewer than 100 contributors are returned, we've reached the end
+        if len(contributors) < 100:
+            break
+
+        page += 1
+
+    print(f'Total contributors: {total_contributors_count}')
     return Response(content=json.dumps(contributors_list), media_type="application/json")
+
 #----------------------------------------------------------------#
 
 # -------------------- /repos/issues ------------------------------#
