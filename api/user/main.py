@@ -9,7 +9,7 @@ router = APIRouter(
     tags=['/api/user'],
 )
 
-#--- request function ---#
+# --- Request function --- #
 async def request(url, headers):
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
@@ -24,6 +24,7 @@ async def request(url, headers):
             return {'error': 500, 'message': str(e)}
 # ------------------------ #
 
+# --- Call GitHub API to fetch user data --- #
 async def callGithubAPIUser(github_id):
     global remaining_requests, current_token
     
@@ -36,9 +37,10 @@ async def callGithubAPIUser(github_id):
     }
     
     url = f'{API_URL}/users/{github_id}'
-    return  await request(url, headers)
-# ------------------------ # 
-        
+    return await request(url, headers)
+# ------------------------ #
+
+# --- Call GitHub API with a suffix URL --- #
 async def callGithubAPI(suffix_URL, github_id):
     global remaining_requests, current_token
     
@@ -52,8 +54,9 @@ async def callGithubAPI(suffix_URL, github_id):
     url= f'{API_URL}/users/{github_id}/{suffix_URL}'
     
     return await request(url, headers)
+# ------------------------ #
 
-# -------------------- Get all Data ------------------------------#
+# --- Get all data --- #
 @router.get('', response_class=Response)
 async def get(github_id: str):
     GithubID = github_id
@@ -61,13 +64,10 @@ async def get(github_id: str):
     # Call the GitHub API and fetch user data
     student = await callGithubAPIUser(GithubID)
 
-    # Check if there is an error key in the student dictionary
     if 'error' in student:
-        # If error is present, log it or handle accordingly, then skip further processing
         print(f"Error encountered: {student['error']}")
         raise HTTPException(status_code=404, detail=f"User {GithubID} not found")
     
-    # Prepare the response data dictionary
     user_item = {
         'GithubID': student['login'],
         'Follower_CNT': student['followers'],
@@ -79,13 +79,11 @@ async def get(github_id: str):
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
-    # Return the user data
     return Response(content=json.dumps(user_item), media_type='application/json')
 # ---------------------------------------------------------------#
 
-
-# -------------------- Get data individually --------------------#
-@router.get('/id', response_class = Response)
+# --- Get data individually --- #
+@router.get('/id', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -94,7 +92,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/node_id', response_class = Response)
+@router.get('/node_id', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -103,7 +101,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/avatar_url', response_class = Response)
+@router.get('/avatar_url', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -112,7 +110,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/follower_list', response_class = Response)
+@router.get('/follower_list', response_class=Response)
 async def get(github_id: str):
     page = 1
     id_list = []
@@ -124,13 +122,14 @@ async def get(github_id: str):
         for key in follower_list:
             user = {
                 'login': key['login'],
-                'id' : key['id']
+                'id': key['id']
             }
             id_list.append(user)
         page += 1
-        return Response(content=json.dumps(id_list), media_type='application/json')
+    return Response(content=json.dumps(id_list), media_type='application/json')
 
-@router.get('/followers', response_class = Response)
+
+@router.get('/followers', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -139,7 +138,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/following_list', response_class = Response)
+@router.get('/following_list', response_class=Response)
 async def get(github_id: str):
     page = 1
     id_list = []
@@ -151,23 +150,14 @@ async def get(github_id: str):
         for key in following_list:
             user = {
                 'login': key['login'],
-                'id' : key['id']
+                'id': key['id']
             }
             id_list.append(user)
         page += 1
-        return Response(content=json.dumps(id_list), media_type='application/json')
+    return Response(content=json.dumps(id_list), media_type='application/json')
 
 
-@router.get('/following', response_class = Response)
-async def get(github_id: str):
-    userinfo = await callGithubAPIUser(github_id=github_id)
-    item = {
-        'following': userinfo["following"]
-    }
-    return Response(content=json.dumps(item), media_type='application/json')
-
-
-@router.get('/name', response_class = Response)
+@router.get('/name', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -176,7 +166,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/public_repos', response_class = Response)
+@router.get('/public_repos', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -185,7 +175,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/repo_list', response_class = Response)
+@router.get('/repo_list', response_class=Response)
 async def get(github_id: str):
     page = 1
     id_list = []
@@ -197,24 +187,15 @@ async def get(github_id: str):
         for key in repo_list:
             user = {
                 'name': key['name'],
-                'id' : key['id'],
+                'id': key['id'],
                 'full_name': key['full_name']
             }
             id_list.append(user)
         page += 1
-        return Response(content=json.dumps(id_list), media_type='application/json')
+    return Response(content=json.dumps(id_list), media_type='application/json')
 
 
-@router.get('/following', response_class = Response)
-async def get(github_id: str):
-    userinfo = await callGithubAPIUser(github_id=github_id)
-    item = {
-        'following': userinfo["following"]
-    }
-    return Response(content=json.dumps(item), media_type='application/json')
-
-
-@router.get('/public_gists', response_class = Response)
+@router.get('/public_gists', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -223,7 +204,7 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/created_at', response_class = Response)
+@router.get('/created_at', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
@@ -232,13 +213,14 @@ async def get(github_id: str):
     return Response(content=json.dumps(item), media_type='application/json')
 
 
-@router.get('/updated_at', response_class = Response)
+@router.get('/updated_at', response_class=Response)
 async def get(github_id: str):
     userinfo = await callGithubAPIUser(github_id=github_id)
     item = {
         'created_at': userinfo["updated_at"]
     }
     return Response(content=json.dumps(item), media_type='application/json')
+
 
 @router.get('/repos', response_class=Response)
 async def get(github_id: str):

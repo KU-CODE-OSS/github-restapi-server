@@ -5,12 +5,11 @@ import json
 from datetime import datetime
 import asyncio
 
-# --- ROUTER ---#
 router = APIRouter(
     prefix="/api/repos",
     tags=['/api/repos'],
 )
-# ------------- #
+
 #--- request function ---#
 async def request(url, headers):
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -26,7 +25,7 @@ async def request(url, headers):
             return {'error': 500, 'message': str(e)}
 # ------------------------ #
 
-# --- callGithubAPI function ---#
+# --- REPOSITORY RELATED URL ---#
 async def callGithubAPI(repo_id):
     global remaining_requests, current_token
     
@@ -40,6 +39,7 @@ async def callGithubAPI(repo_id):
 
     url = f'{API_URL}/repositories/{repo_id}'
     return await request(url, headers)
+# ------------------------ #
 
 async def callGithubAPI_DETAIL(suffix_URL, github_id):
     global remaining_requests, current_token
@@ -54,6 +54,7 @@ async def callGithubAPI_DETAIL(suffix_URL, github_id):
 
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}'
     return await request(url, headers)
+# ------------------------ #
 
 async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
     global remaining_requests, current_token
@@ -69,35 +70,6 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
     url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08T00:00:00Z'
     return await request(url, headers)
 # ------------------------ #
-# --- callGithubAPI_CONTRIBUTOR function ---#
-async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors'
-    return await request(url, headers)
-# ------------------------ #
-# --- callGithubAPI_ISSUE function ---#
-async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page, since):
-    global remaining_requests, current_token
-    
-    if remaining_requests <= 0 or current_token is None:
-        current_token = await get_new_token()
-    
-    headers = {
-        'Authorization': f'token {current_token}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&since={since}&state={state}&page={page}&per_page=100'
-    return await request(url, headers)
 
 async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
     global remaining_requests, current_token
@@ -112,6 +84,7 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
 
     url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
     return await request(url, headers)
+# ------------------------ #
 
 async def callGithubAPI_PULLS_COUNT(suffix_URL, github_id, state):
     global remaining_requests, current_token
@@ -126,10 +99,40 @@ async def callGithubAPI_PULLS_COUNT(suffix_URL, github_id, state):
 
     url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:pr+state:{state}'
     return await request(url, headers)
-
-
 # ------------------------ #
-# --- callGithubAPI_PULL function ---#
+
+# --- CONTRIBUTOR RELATED URL ---#
+async def callGithubAPI_CONTRIBUTOR(suffix_URL, github_id, page):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/contributors?q=&page={page}&per_page=100'
+    return await request(url, headers)
+# ------------------------ #
+
+# ---ISSUE RELATED URL ---#
+async def callGithubAPI_ISSUE(suffix_URL, github_id, state, page, since):
+    global remaining_requests, current_token
+    
+    if remaining_requests <= 0 or current_token is None:
+        current_token = await get_new_token()
+    
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    url = f'{API_URL}/repos/{github_id}/{suffix_URL}/issues?q=&since={since}&state={state}&page={page}&per_page=100'
+    return await request(url, headers)
+
+# --- PR RELATED URL ---#
 async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
     global remaining_requests, current_token
     
@@ -143,7 +146,8 @@ async def callGithubAPI_PULL(suffix_URL, github_id, state, page, since):
     url= f'{API_URL}/repos/{github_id}/{suffix_URL}/pulls?q=&since={since}&state={state}&page={page}&per_page=100'
     return await request(url, headers)
 # ------------------------ #
-# --- callGithubAPI_COMMIT function ---#
+
+# --- COMMIT RELATED URL ---#
 async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since, per_page):
     global remaining_requests, current_token
     
@@ -157,6 +161,7 @@ async def callGithubAPI_COMMIT(suffix_URL, github_id, page, since, per_page):
 
     url = f'{API_URL}/repos/{github_id}/{suffix_URL}/commits?q=&since={since}&page={page}&per_page={per_page}'
     return await request(url, headers)
+# ------------------------ #
 
 async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
     global remaining_requests, current_token
@@ -210,9 +215,29 @@ async def get_repo_data(github_id: str, repo_id: str):
     languages = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
-    await asyncio.sleep(REQ_DELAY)
-    contributors = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/contributors', github_id=github_id)
-    contributor_logins = [contributor['login'] for contributor in contributors if 'login' in contributor] if 'error' not in contributors else []
+    # Pagination logic for contributors
+    contributors_list = []
+    page = 1
+    total_contributors_count = 0
+
+    while True:
+        await asyncio.sleep(REQ_DELAY)
+        contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
+
+        if 'error' in contributors:
+            raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
+        
+        total_contributors_count += len(contributors)
+
+        for contributor in contributors:
+            if 'login' in contributor:
+                contributors_list.append(contributor['login'])
+
+        # If fewer than 100 contributors are returned, we've reached the end
+        if len(contributors) < 100:
+            break
+
+        page += 1
 
     await asyncio.sleep(REQ_DELAY)
     readme = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/readme', github_id=github_id)
@@ -229,7 +254,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'owner_github_id': repo["owner"]["login"],
         'created_at': repo["created_at"],
         'updated_at': repo["updated_at"],
-        'forked' : repo['fork'],
+        'forked': repo['fork'],
         'forks_count': repo["forks_count"],
         'stars_count': repo["stargazers_count"],
         'commit_count': commit_count,
@@ -238,7 +263,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'open_pr_count': open_pr_count,
         'closed_pr_count': closed_pr_count,
         'language': language_list,
-        'contributors': contributor_logins,
+        'contributors': contributors_list,
         'license': repo["license"]["name"] if repo["license"] else None,
         'has_readme': has_readme,
         'description': repo["description"],
@@ -247,6 +272,7 @@ async def get_repo_data(github_id: str, repo_id: str):
     }
 
     return Response(content=json.dumps(repo_item), media_type="application/json")
+
 
 #--------------------- Get data individually --------------------#
 @router.get('/id', response_class=Response)
@@ -495,20 +521,38 @@ async def get_repo_fork_users(github_id: str, repo_name: str):
 # -------------------- /repos/contributor ------------------------------#
 @router.get('/contributor', response_class=Response)
 async def get_repo_contributors(github_id: str, repo_name: str):
-    await asyncio.sleep(REQ_DELAY)
-    contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id)
+    contributors_list = []
+    page = 1
+    total_contributors_count = 0
 
-    if 'error' in contributors:
-        raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
+    while True:
+        await asyncio.sleep(REQ_DELAY)
+        contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
 
-    contributors_list = [
-        {
-            'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-            'login': contributor["login"],
-            'contributions': contributor["contributions"]
-        } for contributor in contributors if 'login' in contributor and 'contributions' in contributor
-    ]
+        if 'error' in contributors:
+            raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
+        
+        total_contributors_count += len(contributors)
+        print(f"Page {page}: {len(contributors)} contributor(s)")
+
+        for contributor in contributors:
+            if 'login' in contributor and 'contributions' in contributor:
+                contributor_data = {
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
+                    'login': contributor["login"],
+                    'contributions': contributor["contributions"]
+                }
+                contributors_list.append(contributor_data)
+
+        # If fewer than 100 contributors are returned, we've reached the end
+        if len(contributors) < 100:
+            break
+
+        page += 1
+
+    print(f'Total contributors: {total_contributors_count}')
     return Response(content=json.dumps(contributors_list), media_type="application/json")
+
 #----------------------------------------------------------------#
 
 # -------------------- /repos/issues ------------------------------#
@@ -679,8 +723,6 @@ async def get_open_pulls(github_id: str, repo_name: str, since: str):
     return Response(content=json.dumps(pulls), media_type="application/json")
 
 #-------------------- repos/commits ------------------------------#
-from fastapi import HTTPException, Response
-
 @router.get('/commit', response_class=Response)
 async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
