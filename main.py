@@ -12,7 +12,7 @@ import api.user.main as user
 import api.repos.main as repos
 
 # --- settings --- #
-from settings import *
+from utils.settings import *
 
 app = FastAPI()
 app.include_router(user.router)
