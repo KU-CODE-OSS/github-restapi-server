@@ -71,6 +71,7 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
     }
 
     url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
+    print(url)
     return await request(url, headers)
 # ------------------------ #
 
@@ -169,7 +170,7 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_id: str):
-    repo = await callGithubAPI(repo_id=repo_id)
+    repo = await callGithubAPIRepo(repo_id=repo_id)
     if 'error' in repo:
         if repo['error'] == 404:
             raise HTTPException(status_code=404, detail=f"Repository {repo_id} not found")
