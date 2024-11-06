@@ -71,7 +71,6 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
     }
 
     url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}'
-    print(url)
     return await request(url, headers)
 # ------------------------ #
 
