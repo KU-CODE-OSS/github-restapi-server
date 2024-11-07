@@ -59,7 +59,7 @@ async def callGithubAPI_COMMIT_COUNT(suffix_URL, github_id):
     return await request(url, headers)
 # ------------------------ #
 
-async def callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL, github_id):
+async def callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL, parent_github_id, github_id):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -70,7 +70,7 @@ async def callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL, github_id):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/commits?q=repo:{github_id}/{suffix_URL}+committer-date:>=2008-02-08T00:00:00Z+author:{github_id}'
+    url = f'{API_URL}/search/commits?q=repo:{parent_github_id}/{suffix_URL}+committer-date:>=2008-02-08T00:00:00Z+author:{github_id}'
     return await request(url, headers)
 # ------------------------ #
 
@@ -89,7 +89,7 @@ async def callGithubAPI_ISSUE_COUNT(suffix_URL, github_id, state):
     return await request(url, headers)
 # ------------------------ #
 
-async def callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL, github_id, state):
+async def callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL, parent_github_id, github_id, state):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -100,7 +100,7 @@ async def callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL, github_id, state):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:issue+state:{state}+author:{github_id}'
+    url = f'{API_URL}/search/issues?q=repo:{parent_github_id}/{suffix_URL}+type:issue+state:{state}+author:{github_id}'
     return await request(url, headers)
 # ------------------------ #
 
@@ -119,7 +119,7 @@ async def callGithubAPI_PULLS_COUNT(suffix_URL, github_id, state):
     return await request(url, headers)
 # ------------------------ #
 
-async def callGithubAPI_OWNER_PULLS_COUNT(suffix_URL, github_id, state):
+async def callGithubAPI_OWNER_PULLS_COUNT(suffix_URL, parent_github_id, github_id, state):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -130,7 +130,7 @@ async def callGithubAPI_OWNER_PULLS_COUNT(suffix_URL, github_id, state):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/search/issues?q=repo:{github_id}/{suffix_URL}+type:pr+state:{state}+author:{github_id}'
+    url = f'{API_URL}/search/issues?q=repo:{parent_github_id}/{suffix_URL}+type:pr+state:{state}+author:{github_id}'
     return await request(url, headers)
 # ------------------------ #
 
@@ -221,28 +221,34 @@ async def get_repo_data(github_id: str, repo_id: str):
         else:
             raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
 
-    repo_name = repo["name"]
+    if repo["fork"] == True:
+        parent_github_id = repo["parent"]["owner"]["login"]
+        repo_name = repo["parent"]["name"]
 
+    else:
+        parent_github_id = github_id
+        repo_name = repo["name"]
+    
 
     # Repository owner details
     await asyncio.sleep(REQ_DELAY)
-    owner_commit_counts = await callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+    owner_commit_counts = await callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id)
     owner_commit_count = owner_commit_counts.get("total_count", 0) if 'error' not in owner_commit_counts else 0
 
     await asyncio.sleep(REQ_DELAY)
-    owner_open_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
+    owner_open_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id,  state="open")
     owner_open_issue_count = owner_open_issues.get("total_count", 0) if 'error' not in owner_open_issues else 0
 
     await asyncio.sleep(REQ_DELAY)
-    owner_closed_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    owner_closed_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
     owner_closed_issue_count = owner_closed_issues.get("total_count", 0) if 'error' not in owner_closed_issues else 0
 
     await asyncio.sleep(REQ_DELAY)
-    owner_open_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
+    owner_open_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
     owner_open_pr_count = owner_open_prs.get("total_count", 0) if 'error' not in owner_open_prs else 0
 
     await asyncio.sleep(REQ_DELAY)
-    owner_closed_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
+    owner_closed_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
     owner_closed_pr_count = owner_closed_prs.get("total_count", 0) if 'error' not in owner_closed_prs else 0
 
     # Repository overall
