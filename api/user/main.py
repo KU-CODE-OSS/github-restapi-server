@@ -50,6 +50,7 @@ async def get(github_id: str):
     GithubID = github_id
 
     # Call the GitHub API and fetch user data
+    await asyncio.sleep(REQ_DELAY)
     student = await callGithubAPIUser(GithubID)
 
     if 'error' in student:
