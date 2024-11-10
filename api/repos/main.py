@@ -214,48 +214,62 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 # -------------------- Get all Data ------------------------------#
 @router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_id: str):
+    # Fetch repository information
     repo = await callGithubAPIRepo(repo_id=repo_id)
     if 'error' in repo:
-        if repo['error'] == 404:
-            raise HTTPException(status_code=404, detail=f"Repository {repo_id} not found")
-        else:
-            raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
+        error_message = f"Repository {repo_id} not found" if repo['error'] == 404 else f"Failed to fetch repository: {repo['message']}"
+        raise HTTPException(status_code=repo['error'], detail=error_message)
 
-    if repo["fork"] == True:
-        parent_github_id = repo["parent"]["owner"]["login"]
-        repo_name = repo["parent"]["name"]
+    # Determine if the repository is forked and get parent details if so
+    is_fork = repo["fork"]
+    parent_github_id = repo["parent"]["owner"]["login"] if is_fork else github_id
+    repo_name = repo["name"]
+    parent_repo_name = repo["parent"]["name"] if is_fork else repo_name
 
+    # Fetch contributed commit counts, issues, and PRs for the owner
+    await asyncio.sleep(REQ_DELAY)
+    contributed_commit_counts = await callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id)
+    contributed_commit_count = contributed_commit_counts.get("total_count", 0) if 'error' not in contributed_commit_counts else 0
+
+    await asyncio.sleep(REQ_DELAY)
+    contributed_open_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
+    contributed_open_issue_count = contributed_open_issues.get("total_count", 0) if 'error' not in contributed_open_issues else 0
+
+    await asyncio.sleep(REQ_DELAY)
+    contributed_closed_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
+    contributed_closed_issue_count = contributed_closed_issues.get("total_count", 0) if 'error' not in contributed_closed_issues else 0
+
+    await asyncio.sleep(REQ_DELAY)
+    contributed_open_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
+    contributed_open_pr_count = contributed_open_prs.get("total_count", 0) if 'error' not in contributed_open_prs else 0
+
+    await asyncio.sleep(REQ_DELAY)
+    contributed_closed_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
+    contributed_closed_pr_count = contributed_closed_prs.get("total_count", 0) if 'error' not in contributed_closed_prs else 0
+
+    # Count total commits in forked or non-forked repo
+    if is_fork:
+        page = 1
+        per_page = 100
+        since = "2008-02-08T00:00:00Z"
+        total_commit_count = 0
+
+        while True:
+            await asyncio.sleep(REQ_DELAY)
+            commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
+            if 'error' in commit_list or not commit_list:
+                break
+            total_commit_count += len(commit_list)
+            if len(commit_list) < per_page:
+                break
+            page += 1
+
+        commit_count = total_commit_count
     else:
-        parent_github_id = github_id
-        repo_name = repo["name"]
-    
+        commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
+        commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
 
-    # Repository owner details
-    await asyncio.sleep(REQ_DELAY)
-    owner_commit_counts = await callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id)
-    owner_commit_count = owner_commit_counts.get("total_count", 0) if 'error' not in owner_commit_counts else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    owner_open_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id,  state="open")
-    owner_open_issue_count = owner_open_issues.get("total_count", 0) if 'error' not in owner_open_issues else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    owner_closed_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
-    owner_closed_issue_count = owner_closed_issues.get("total_count", 0) if 'error' not in owner_closed_issues else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    owner_open_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
-    owner_open_pr_count = owner_open_prs.get("total_count", 0) if 'error' not in owner_open_prs else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    owner_closed_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
-    owner_closed_pr_count = owner_closed_prs.get("total_count", 0) if 'error' not in owner_closed_prs else 0
-
-    # Repository overall
-    await asyncio.sleep(REQ_DELAY)
-    commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
-    commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
-
+    # Fetch open and closed issues, and PR counts
     await asyncio.sleep(REQ_DELAY)
     open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
     open_issue_count = open_issues.get("total_count", 0) if 'error' not in open_issues else 0
@@ -272,42 +286,36 @@ async def get_repo_data(github_id: str, repo_id: str):
     closed_prs = await callGithubAPI_PULLS_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
     closed_pr_count = closed_prs.get("total_count", 0) if 'error' not in closed_prs else 0
 
+    # Fetch repository languages
     await asyncio.sleep(REQ_DELAY)
     languages = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
-    # Pagination logic for contributors
+    # Fetch contributors with pagination
     contributors_list = []
     page = 1
-    total_contributors_count = 0
-
+    per_page = 100
     while True:
         await asyncio.sleep(REQ_DELAY)
         contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
-
         if 'error' in contributors:
-            raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
-        
-        total_contributors_count += len(contributors)
-
-        for contributor in contributors:
-            if 'login' in contributor:
-                contributors_list.append(contributor['login'])
-
-        # If fewer than 100 contributors are returned, we've reached the end
-        if len(contributors) < 100:
             break
-
+        contributors_list.extend(contributor['login'] for contributor in contributors if 'login' in contributor)
+        if len(contributors) < per_page:
+            break
         page += 1
 
+    # Check if README exists
     await asyncio.sleep(REQ_DELAY)
     readme = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/readme', github_id=github_id)
-    has_readme = True if 'error' not in readme else False
+    has_readme = 'error' not in readme
 
+    # Fetch latest release version
     await asyncio.sleep(REQ_DELAY)
     latest_release = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
     release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
 
+    # Compile all repository details into the final response
     repo_item = {
         'id': repo["id"],
         'name': repo["name"],
@@ -315,7 +323,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'owner_github_id': repo["owner"]["login"],
         'created_at': repo["created_at"],
         'updated_at': repo["updated_at"],
-        'forked': repo['fork'],
+        'forked': is_fork,
         'forks_count': repo["forks_count"],
         'stars_count': repo["stargazers_count"],
         'commit_count': commit_count,
@@ -323,11 +331,11 @@ async def get_repo_data(github_id: str, repo_id: str):
         'closed_issue_count': closed_issue_count,
         'open_pr_count': open_pr_count,
         'closed_pr_count': closed_pr_count,
-        'owner_commit_count': owner_commit_count,
-        'owner_open_issue_count': owner_open_issue_count,
-        'owner_closed_issue_count': owner_closed_issue_count,
-        'owner_open_pr_count': owner_open_pr_count,
-        'owner_closed_pr_count': owner_closed_pr_count,
+        'contributed_commit_count': contributed_commit_count,
+        'contributed_open_issue_count': contributed_open_issue_count,
+        'contributed_closed_issue_count': contributed_closed_issue_count,
+        'contributed_open_pr_count': contributed_open_pr_count,
+        'contributed_closed_pr_count': contributed_closed_pr_count,
         'language': language_list,
         'contributors': contributors_list,
         'license': repo["license"]["name"] if repo["license"] else None,
@@ -338,251 +346,6 @@ async def get_repo_data(github_id: str, repo_id: str):
     }
 
     return Response(content=json.dumps(repo_item), media_type="application/json")
-
-
-#--------------------- Get data individually --------------------#
-# @router.get('/id', response_class=Response)
-# async def get_repo_id(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'id': repoinfo["id"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/node_id', response_class=Response)
-# async def get_repo_node_id(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIReposuffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'node_id': repoinfo["node_id"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/name', response_class=Response)
-# async def get_repo_name(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'name': repoinfo["name"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/full_name', response_class=Response)
-# async def get_repo_full_name(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'full_name': repoinfo["full_name"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/html_url', response_class=Response)
-# async def get_repo_html_url(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'html_url': repoinfo["html_url"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/owner', response_class=Response)
-# async def get_repo_owner(github_id: str, repo_name: str):
-#     item = {'owner': github_id}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/created_at', response_class=Response)
-# async def get_repo_created_at(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'created_at': repoinfo["created_at"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/updated_at', response_class=Response)
-# async def get_repo_updated_at(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'updated_at': repoinfo["updated_at"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/pushed_at', response_class=Response)
-# async def get_repo_pushed_at(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'pushed_at': repoinfo["pushed_at"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/clone', response_class=Response)
-# async def get_repo_clone(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {
-#         'https': repoinfo["clone_url"],
-#         'ssh': repoinfo["ssh_url"]
-#     }
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/stars_count', response_class=Response)
-# async def get_repo_stars_count(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'stars': repoinfo["stargazers_count"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/commit_count', response_class=Response)
-# async def get_repo_commit_count(github_id: str, repo_name: str):
-
-#     commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
-#     commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
-
-#     return Response(content=json.dumps(commit_count), media_type="application/json")
-
-# @router.get('/watchers_count', response_class=Response)
-# async def get_repo_watchers_count(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'watchers': repoinfo["watchers"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/repo_size', response_class=Response)
-# async def get_repo_size(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'size': repoinfo["size"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/forks_count', response_class=Response)
-# async def get_repo_forks_count(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'forks': repoinfo["forks"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/open_issues_count', response_class=Response)
-# async def get_repo_open_issues_count(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'open_issues_count': repoinfo["open_issues_count"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/closed_issues_count', response_class=Response)
-# async def get_repo_closed_issues_count(github_id: str, repo_name: str):
-
-#     closed_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="closed")
-#     closed_issue_count = closed_issues.get("total_count", 0) if 'error' not in closed_issues else 0
-    
-#     return Response(content=json.dumps(closed_issue_count), media_type="application/json")
-
-# @router.get('/laguages', response_class=Response)
-# async def get_repo_languages(github_id: str, repo_name: str):
-#     languages = await callGithubAPIRepo(suffix_URL=f"{repo_name}/languages", github_id=github_id)
-#     if 'error' in languages:
-#         raise HTTPException(status_code=languages['error'], detail=languages['message'])
-
-#     language_names = list(languages.keys())
-#     item = {'languages': language_names}
-#     return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
-
-# @router.get('/contributors', response_class=Response)
-# async def get_repo_contributors(github_id: str, repo_name: str):
-#     contributors = await callGithubAPIRepo(suffix_URL=f"{repo_name}/contributors", github_id=github_id)
-#     if 'error' in contributors:
-#         raise HTTPException(status_code=contributors['error'], detail=contributors['message'])
-
-#     contributors_names = [contributor['login'] for contributor in contributors if 'login' in contributor]
-#     item = {'contributor': contributors_names}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/license', response_class=Response)
-# async def get_repo_license(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'license': repoinfo["license"]["key"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/has_readme', response_class=Response)
-# async def get_repo_has_readme(github_id: str, repo_name: str):
-#     readme_info = await callGithubAPIRepo(suffix_URL=f"{repo_name}/readme", github_id=github_id)
-#     has_readme = False if 'error' in readme_info else True
-
-#     item = {'has_readme': has_readme}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/description', response_class=Response)
-# async def get_repo_description(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'description': repoinfo["description"]}
-#     return Response(content=json.dumps(item, indent=4, default=str), media_type="application/json")
-
-# @router.get('/release_version', response_class=Response)
-# async def get_repo_release_version(github_id: str, repo_name: str):
-#     latest_release = await callGithubAPIRepo(suffix_URL=f"{repo_name}/releases/latest", github_id=github_id)
-#     release_version = latest_release.get('tag_name', 'No release found') if 'error' not in latest_release else 'No release found'
-
-#     item = {'release_version': release_version}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/fork', response_class=Response)
-# async def get_repo_fork(github_id: str, repo_name: str):
-#     repoinfo = await callGithubAPIRepo(suffix_URL=repo_name, github_id=github_id)
-#     if 'error' in repoinfo:
-#         raise HTTPException(status_code=repoinfo['error'], detail=repoinfo['message'])
-
-#     item = {'fork': repoinfo["fork"]}
-#     return Response(content=json.dumps(item), media_type="application/json")
-
-# @router.get('/fork_users', response_class=Response)
-# async def get_repo_fork_users(github_id: str, repo_name: str):
-#     page = 1
-#     user_list = []
-#     while True:
-#         users = await callGithubAPIRepo(suffix_URL=f'{repo_name}/forks?q=page={page}&per_page=100', github_id=github_id)
-#         if 'error' in users or not users:
-#             break
-
-#         for key in users:
-#             d = {
-#                 'github_id': key['owner']['login'],
-#                 'id': key['owner']['id'],
-#                 'url': key['owner']['url']
-#             }
-#             user = {
-#                 'owner': d,
-#                 'id': key['id'],
-#                 'name': key['name'],
-#                 'full_name': key['full_name'],
-#                 'stars': key['stargazers_count'],
-#                 'watchers': key["watchers"],
-#                 'forks': key["forks"],
-#                 'open_issues_count': key['open_issues_count'],
-#             }
-#             user_list.append(user)
-#         page += 1
-#     return Response(content=json.dumps(user_list), media_type="application/json")
-# ---------------------------------------------------------------#
 
 # -------------------- /repos/contributor ------------------------------#
 @router.get('/contributor', response_class=Response)
@@ -659,65 +422,6 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
     print(f'Total issues: {total_issue_count}')
     return Response(content=json.dumps(issues), media_type="application/json")
 
-# @router.get('/issues/open', response_class=Response)
-# async def get_open_issues(github_id: str, repo_name: str, since: str):
-#     page = 1
-#     issues = []
-#     state = "open"
-#     while True:
-#         issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
-#         if 'error' in issue_list or not issue_list:
-#             break
-
-#         for issue in issue_list:
-#             issue_data = {
-#                 'id': issue['id'],
-#                 'owner_github_id': github_id,
-#                 'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-#                 'state': issue['state'],
-#                 'title': issue['title'],
-#                 'publisher_github_id': issue['user']['login'],
-#                 'last_update': issue['created_at'],
-#             }
-#             issues.append(issue_data)
-
-#         if len(issue_list) < 100:
-#             break
-        
-#         page += 1
-
-#     return Response(content=json.dumps(issues), media_type="application/json")
-
-# @router.get('/issues/closed', response_class=Response)
-# async def get_closed_issues(github_id: str, repo_name: str, since: str):
-#     page = 1
-#     issues = []
-#     state = "closed"
-#     while True:
-#         issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
-#         if 'error' in issue_list or not issue_list:
-#             break
-
-#         for issue in issue_list:
-#             issue_data = {
-#                 'id': issue['id'],
-#                 'owner_github_id': github_id,
-#                 'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-#                 'state': issue['state'],
-#                 'title': issue['title'],
-#                 'publisher_github_id': issue['user']['login'],
-#                 'last_update': issue['created_at'],
-#             }
-#             issues.append(issue_data)
-
-#         if len(issue_list) < 100:
-#             break
-
-#         page += 1
-
-#     return Response(content=json.dumps(issues), media_type="application/json")
-#----------------------------------------------------------------#
-
 #-------------------- repos/pulls ------------------------------#
 @router.get('/pulls', response_class=Response)
 async def get_repo_pulls(github_id: str, repo_name: str, since: str):
@@ -758,74 +462,13 @@ async def get_repo_pulls(github_id: str, repo_name: str, since: str):
 
     return Response(content=json.dumps(pulls), media_type="application/json")
 
-# @router.get('/pulls/open', response_class=Response)
-# async def get_open_pulls(github_id: str, repo_name: str, since: str):
-#     page = 1
-#     pulls = []
-#     state = "open"
-#     while True:
-#         await asyncio.sleep(REQ_DELAY)
-#         pulls_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
-#         if 'error' in pulls_list or not pulls_list:
-#             break
-
-#         for pull in pulls_list:
-#             pull_data = {
-#                 'id': pull["id"],
-#                 'owner_github_id': github_id,
-#                 'state': pull["state"],
-#                 'title': pull["title"],
-#                 'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-#                 'requester_id': pull['user']['login'],
-#                 'last_update': pull['created_at'],
-#             }
-#             pulls.append(pull_data)
-
-#         if len(pulls_list) < 100:
-#             break
-        
-#         page += 1
-
-#     return Response(content=json.dumps(pulls), media_type="application/json")
-
-# @router.get('/pulls/closed', response_class=Response)
-# async def get_open_pulls(github_id: str, repo_name: str, since: str):
-#     page = 1
-#     pulls = []
-#     state = "closed"
-#     while True:
-#         await asyncio.sleep(REQ_DELAY)
-#         pulls_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
-#         if 'error' in pulls_list or not pulls_list:
-#             break
-
-#         for pull in pulls_list:
-#             pull_data = {
-#                 'id': pull["id"],
-#                 'owner_github_id': github_id,
-#                 'state': pull["state"],
-#                 'title': pull["title"],
-#                 'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-#                 'requester_id': pull['user']['login'],
-#                 'last_update': pull['created_at'],
-#             }
-#             pulls.append(pull_data)
-
-#         if len(pulls_list) < 100:
-#             break
-        
-#         page += 1
-
-#     return Response(content=json.dumps(pulls), media_type="application/json")
-#----------------------------------------------------------------#
-
 #-------------------- repos/commits ------------------------------#
 @router.get('/commit', response_class=Response)
 async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
     commits = []
     per_page = 100  
-    max_pages = 20
+    max_pages = 5
     total_commit_count = 0
 
     try:
@@ -851,7 +494,7 @@ async def get_commits(github_id: str, repo_name: str, since: str):
                     'sha': sha,
                     'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'owner_github_id': github_id,
-                    'committer_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
+                    'author_github_id': commit['author']['login'] if commit['author'] else 'Unknown',
                     'added_lines': commit_detail['stats'].get('additions', 0),
                     'deleted_lines': commit_detail['stats'].get('deletions', 0),
                     'last_update': commit_detail['commit']['author'].get('date', 'Unknown'),
