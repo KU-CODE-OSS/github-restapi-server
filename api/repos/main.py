@@ -215,6 +215,8 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 @router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_id: str):
     # Fetch repository information
+
+    await asyncio.sleep(REQ_DELAY)
     repo = await callGithubAPIRepo(repo_id=repo_id)
     if 'error' in repo:
         error_message = f"Repository {repo_id} not found" if repo['error'] == 404 else f"Failed to fetch repository: {repo['message']}"
@@ -345,6 +347,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
+    print(repo_item)
     return Response(content=json.dumps(repo_item), media_type="application/json")
 
 # -------------------- /repos/contributor ------------------------------#

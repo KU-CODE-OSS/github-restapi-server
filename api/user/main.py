@@ -67,150 +67,12 @@ async def get(github_id: str):
         'email': student['email'],
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
+    print(user_item)
 
     return Response(content=json.dumps(user_item), media_type='application/json')
 # ---------------------------------------------------------------#
 
-# # --- Get data individually --- #
-# @router.get('/id', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'id': userinfo["id"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/node_id', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'node_id': userinfo["node_id"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/avatar_url', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'avatar_url': userinfo["avatar_url"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/follower_list', response_class=Response)
-# async def get(github_id: str):
-#     page = 1
-#     id_list = []
-#     while True:
-#         follower_list = await callGithubAPI(f'followers?q=page={page}&per_page=100', github_id=github_id)
-#         if len(follower_list) == 0:
-#             break
-
-#         for key in follower_list:
-#             user = {
-#                 'login': key['login'],
-#                 'id': key['id']
-#             }
-#             id_list.append(user)
-#         page += 1
-#     return Response(content=json.dumps(id_list), media_type='application/json')
-
-
-# @router.get('/followers', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'followers': userinfo["followers"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/following_list', response_class=Response)
-# async def get(github_id: str):
-#     page = 1
-#     id_list = []
-#     while True:
-#         following_list = await callGithubAPI(f'following?q=page={page}&per_page=100', github_id=github_id)
-#         if len(following_list) == 0:
-#             break
-
-#         for key in following_list:
-#             user = {
-#                 'login': key['login'],
-#                 'id': key['id']
-#             }
-#             id_list.append(user)
-#         page += 1
-#     return Response(content=json.dumps(id_list), media_type='application/json')
-
-
-# @router.get('/name', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'name': userinfo["name"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/public_repos', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'public_repos': userinfo["public_repos"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/repo_list', response_class=Response)
-# async def get(github_id: str):
-#     page = 1
-#     id_list = []
-#     while True:
-#         repo_list = await callGithubAPI(f'repos?q=page={page}&per_page=100', github_id=github_id)
-#         if len(repo_list) == 0:
-#             break
-
-#         for key in repo_list:
-#             user = {
-#                 'name': key['name'],
-#                 'id': key['id'],
-#                 'full_name': key['full_name']
-#             }
-#             id_list.append(user)
-#         page += 1
-#     return Response(content=json.dumps(id_list), media_type='application/json')
-
-
-# @router.get('/public_gists', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'public_repos': userinfo["public_gists"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/created_at', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'created_at': userinfo["created_at"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
-# @router.get('/updated_at', response_class=Response)
-# async def get(github_id: str):
-#     userinfo = await callGithubAPIUser(github_id=github_id)
-#     item = {
-#         'created_at': userinfo["updated_at"]
-#     }
-#     return Response(content=json.dumps(item), media_type='application/json')
-
-
+# --- Get User's Repo id, name--- #
 @router.get('/repos', response_class=Response)
 async def get(github_id: str):
     page = 1
@@ -218,6 +80,7 @@ async def get(github_id: str):
     per_page = 100
     
     while True:
+        await asyncio.sleep(REQ_DELAY)
         repo_list = await callGithubAPIUserRepo(f'repos?q=&page={page}&per_page={per_page}', github_id=github_id)
         if not repo_list:
             break
@@ -235,5 +98,7 @@ async def get(github_id: str):
             break
 
         page += 1
-
+    
+    print(f"Total repos: {len(repos)}")
+    print(repos)
     return Response(content=json.dumps(repos), media_type='application/json')
