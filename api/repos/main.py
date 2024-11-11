@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Response, HTTPException
-
 from utils.settings import *
 from commons.api_client import request
 
@@ -12,6 +11,23 @@ router = APIRouter(
     prefix="/api/repos",
     tags=['/api/repos'],
 )
+
+# GraphQL API 호출 함수 수정
+async def callGithubAPI_GRAPHQL(query: str):
+    url = "https://api.github.com/graphql"
+    headers = {
+        'Authorization': f'token {current_token}',
+        'Accept': 'application/vnd.github.v3+json',
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json={"query": query}, headers=headers)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {"error": response.status_code, "message": response.json().get("message", "Error occurred")}
+
 
 # --- REPOSITORY RELATED URL ---#
 async def callGithubAPIRepo(repo_id):
@@ -215,63 +231,40 @@ async def callGithubAPI_COMMIT_DETAIL(suffix_URL, github_id, sha):
 @router.get('', response_class=Response)
 async def get_repo_data(github_id: str, repo_id: str):
     # Fetch repository information
-
     await asyncio.sleep(REQ_DELAY)
     repo = await callGithubAPIRepo(repo_id=repo_id)
     if 'error' in repo:
         error_message = f"Repository {repo_id} not found" if repo['error'] == 404 else f"Failed to fetch repository: {repo['message']}"
         raise HTTPException(status_code=repo['error'], detail=error_message)
 
-    # Determine if the repository is forked and get parent details if so
     is_fork = repo["fork"]
     parent_github_id = repo["parent"]["owner"]["login"] if is_fork else github_id
     repo_name = repo["name"]
     parent_repo_name = repo["parent"]["name"] if is_fork else repo_name
 
-    # Fetch contributed commit counts, issues, and PRs for the owner
+    # Define GraphQL query to fetch commit count
+    graphql_query = """
+    {
+      repository(owner: "%s", name: "%s") {
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              history {
+                totalCount
+              }
+            }
+          }
+        }
+      }
+    }
+    """ % (parent_github_id, parent_repo_name)
+
+    # Execute GraphQL query to fetch total commit count
     await asyncio.sleep(REQ_DELAY)
-    contributed_commit_counts = await callGithubAPI_OWNER_COMMIT_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id)
-    contributed_commit_count = contributed_commit_counts.get("total_count", 0) if 'error' not in contributed_commit_counts else 0
+    commit_count_response = await callGithubAPI_GRAPHQL(query=graphql_query)
+    commit_count = commit_count_response.get("data", {}).get("repository", {}).get("defaultBranchRef", {}).get("target", {}).get("history", {}).get("totalCount", 0)
 
-    await asyncio.sleep(REQ_DELAY)
-    contributed_open_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
-    contributed_open_issue_count = contributed_open_issues.get("total_count", 0) if 'error' not in contributed_open_issues else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    contributed_closed_issues = await callGithubAPI_OWNER_ISSUE_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
-    contributed_closed_issue_count = contributed_closed_issues.get("total_count", 0) if 'error' not in contributed_closed_issues else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    contributed_open_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
-    contributed_open_pr_count = contributed_open_prs.get("total_count", 0) if 'error' not in contributed_open_prs else 0
-
-    await asyncio.sleep(REQ_DELAY)
-    contributed_closed_prs = await callGithubAPI_OWNER_PULLS_COUNT(suffix_URL=parent_repo_name, parent_github_id=parent_github_id, github_id=github_id, state="closed")
-    contributed_closed_pr_count = contributed_closed_prs.get("total_count", 0) if 'error' not in contributed_closed_prs else 0
-
-    # Count total commits in forked or non-forked repo
-    if is_fork:
-        page = 1
-        per_page = 100
-        since = "2008-02-08T00:00:00Z"
-        total_commit_count = 0
-
-        while True:
-            await asyncio.sleep(REQ_DELAY)
-            commit_list = await callGithubAPI_COMMIT(suffix_URL=repo_name, github_id=github_id, page=page, since=since, per_page=per_page)
-            if 'error' in commit_list or not commit_list:
-                break
-            total_commit_count += len(commit_list)
-            if len(commit_list) < per_page:
-                break
-            page += 1
-
-        commit_count = total_commit_count
-    else:
-        commit_counts = await callGithubAPI_COMMIT_COUNT(suffix_URL=repo_name, github_id=github_id)
-        commit_count = commit_counts.get("total_count", 0) if 'error' not in commit_counts else 0
-
-    # Fetch open and closed issues, and PR counts
+    # Fetch other repository data (issues, PRs, etc.)
     await asyncio.sleep(REQ_DELAY)
     open_issues = await callGithubAPI_ISSUE_COUNT(suffix_URL=repo_name, github_id=github_id, state="open")
     open_issue_count = open_issues.get("total_count", 0) if 'error' not in open_issues else 0
@@ -293,30 +286,6 @@ async def get_repo_data(github_id: str, repo_id: str):
     languages = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
 
-    # Fetch contributors with pagination
-    contributors_list = []
-    page = 1
-    per_page = 100
-    while True:
-        await asyncio.sleep(REQ_DELAY)
-        contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
-        if 'error' in contributors:
-            break
-        contributors_list.extend(contributor['login'] for contributor in contributors if 'login' in contributor)
-        if len(contributors) < per_page:
-            break
-        page += 1
-
-    # Check if README exists
-    await asyncio.sleep(REQ_DELAY)
-    readme = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/readme', github_id=github_id)
-    has_readme = 'error' not in readme
-
-    # Fetch latest release version
-    await asyncio.sleep(REQ_DELAY)
-    latest_release = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
-    release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
-
     # Compile all repository details into the final response
     repo_item = {
         'id': repo["id"],
@@ -333,22 +302,12 @@ async def get_repo_data(github_id: str, repo_id: str):
         'closed_issue_count': closed_issue_count,
         'open_pr_count': open_pr_count,
         'closed_pr_count': closed_pr_count,
-        'contributed_commit_count': contributed_commit_count,
-        'contributed_open_issue_count': contributed_open_issue_count,
-        'contributed_closed_issue_count': contributed_closed_issue_count,
-        'contributed_open_pr_count': contributed_open_pr_count,
-        'contributed_closed_pr_count': contributed_closed_pr_count,
         'language': language_list,
-        'contributors': contributors_list,
-        'license': repo["license"]["name"] if repo["license"] else None,
-        'has_readme': has_readme,
-        'description': repo["description"],
-        'release_version': release_version,
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
-    print(repo_item)
     return Response(content=json.dumps(repo_item), media_type="application/json")
+
 
 # -------------------- /repos/contributor ------------------------------#
 @router.get('/contributor', response_class=Response)
