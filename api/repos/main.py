@@ -346,11 +346,8 @@ async def get_repo_data(github_id: str, repo_id: str):
                 break
 
             page += 1
-        except HTTPException as e:
-            
-            break
-        except Exception as e:
-        
+        except:
+            print("Empty repository or Something gone long.")
             break
 
 
