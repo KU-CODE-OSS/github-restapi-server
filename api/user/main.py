@@ -67,6 +67,7 @@ async def get(github_id: str):
         'email': student['email'],
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
+    print("-"*20)
     print(user_item)
 
     return Response(content=json.dumps(user_item), media_type='application/json')
@@ -99,6 +100,6 @@ async def get(github_id: str):
 
         page += 1
     
+    print("-"*20)
     print(f"Total repos: {len(repos)}")
-    print(repos)
     return Response(content=json.dumps(repos), media_type='application/json')
