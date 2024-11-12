@@ -19,7 +19,7 @@ pip3 install -r requirements.txt
 
 ## MAKE GITHUB_TOKEN file and put Auth Token
 
-## Start FASTAPI Server
+## Start FASTAPI Server in background
 ```
 nohup uvicorn main:app --reload --host 0.0.0.0 --port 5000 --timeout-keep-alive 30 > uvicorn.log 2>&1 &
 ```
