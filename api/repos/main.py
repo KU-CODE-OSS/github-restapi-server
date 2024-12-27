@@ -235,16 +235,14 @@ async def get_repo_data(github_id: str, repo_id: str):
         if repo['error'] == 404:
             raise HTTPException(status_code=404, detail=f"Repository {repo_id} not found")
         else:
-            raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo['message']}")
+            raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repo.get('message', 'Unknown error')}")
 
-    if repo["fork"] == True:
-        parent_github_id = repo["parent"]["owner"]["login"]
-        repo_name = repo["parent"]["name"]
-
+    if repo.get("fork", False) == True:
+        parent_github_id = repo.get("parent", {}).get("owner", {}).get("login", github_id)
+        repo_name = repo.get("parent", {}).get("name", "")
     else:
         parent_github_id = github_id
-        repo_name = repo["name"]
-    
+        repo_name = repo.get("name", "")
 
     # Repository owner details
     await asyncio.sleep(REQ_DELAY)
@@ -252,7 +250,7 @@ async def get_repo_data(github_id: str, repo_id: str):
     contributed_commit_count = contributed_commit_counts.get("total_count", 0) if 'error' not in contributed_commit_counts else 0
 
     await asyncio.sleep(REQ_DELAY)
-    contributed_open_issues = await callGithubAPI_contributed_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id,  state="open")
+    contributed_open_issues = await callGithubAPI_contributed_ISSUE_COUNT(suffix_URL=repo_name, parent_github_id=parent_github_id, github_id=github_id, state="open")
     contributed_open_issue_count = contributed_open_issues.get("total_count", 0) if 'error' not in contributed_open_issues else 0
 
     await asyncio.sleep(REQ_DELAY)
@@ -268,7 +266,6 @@ async def get_repo_data(github_id: str, repo_id: str):
     contributed_closed_pr_count = contributed_closed_prs.get("total_count", 0) if 'error' not in contributed_closed_prs else 0
 
     # Repository overall
-    # Replace REST API commit count with GraphQL query
     graphql_query = """
     {
       repository(owner: "%s", name: "%s") {
@@ -339,7 +336,7 @@ async def get_repo_data(github_id: str, repo_id: str):
 
             for contributor in contributors:
                 if 'login' in contributor:
-                    contributors_list.append(contributor['login'])
+                    contributors_list.append(contributor.get('login', None))
 
             # If fewer than 100 contributors are returned, we've reached the end
             if len(contributors) < 100:
@@ -347,9 +344,7 @@ async def get_repo_data(github_id: str, repo_id: str):
 
             page += 1
         except:
-            print("Empty repository or Something gone long.")
             break
-
 
     await asyncio.sleep(REQ_DELAY)
     readme = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/readme', github_id=github_id)
@@ -359,36 +354,44 @@ async def get_repo_data(github_id: str, repo_id: str):
     latest_release = await callGithubAPI_DETAIL(suffix_URL=f'{repo_name}/releases/latest', github_id=github_id)
     release_version = latest_release.get('tag_name', None) if 'error' not in latest_release else None
 
+    # Handle the license information
+    license_info = repo.get("license")
+    license_name = license_info.get("name") if license_info else None
+
     repo_item = {
-        'id': repo["id"],
-        'name': repo["name"],
-        'url': repo["html_url"],
-        'owner_github_id': repo["owner"]["login"],
-        'created_at': repo["created_at"],
-        'updated_at': repo["updated_at"],
-        'forked': repo['fork'],
-        'forks_count': repo["forks_count"],
-        'stars_count': repo["stargazers_count"],
+        'id': repo.get("id"),
+        'name': repo.get("name"),
+        'url': repo.get("html_url"),
+        'owner_github_id': repo.get("owner", {}).get("login"),
+        'created_at': repo.get("created_at"),
+        'updated_at': repo.get("updated_at"),
+        'forked': repo.get('fork', False),
+        'forks_count': repo.get("forks_count"),
+        'stars_count': repo.get("stargazers_count"),
         'commit_count': commit_count,
         'open_issue_count': open_issue_count,
         'closed_issue_count': closed_issue_count,
         'open_pr_count': open_pr_count,
         'closed_pr_count': closed_pr_count,
         'contributed_commit_count': contributed_commit_count,
-        'contributedr_open_issue_count': contributed_open_issue_count,
+        'contributed_open_issue_count': contributed_open_issue_count,
         'contributed_closed_issue_count': contributed_closed_issue_count,
         'contributed_open_pr_count': contributed_open_pr_count,
         'contributed_closed_pr_count': contributed_closed_pr_count,
         'language': language_list,
         'contributors': contributors_list,
-        'license': repo["license"]["name"] if repo["license"] else None,
+        'license': license_name,
         'has_readme': has_readme,
-        'description': repo["description"],
+        'description': repo.get("description"),
         'release_version': release_version,
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
 
+    print("-" * 10)
+    print("api/repos")
+    print(repo_item)
     return Response(content=json.dumps(repo_item), media_type="application/json")
+# ------------------------ #
 
 # -------------------- /repos/contributor ------------------------------#
 @router.get('/contributor', response_class=Response)
@@ -401,6 +404,7 @@ async def get_repo_contributors(github_id: str, repo_name: str):
         await asyncio.sleep(REQ_DELAY)
         contributors = await callGithubAPI_CONTRIBUTOR(suffix_URL=repo_name, github_id=github_id, page=page)
 
+        # If the response contains an error, raise an HTTPException
         if 'error' in contributors:
             raise HTTPException(status_code=404, detail=f"Contributors in {repo_name} not found")
         
@@ -408,13 +412,13 @@ async def get_repo_contributors(github_id: str, repo_name: str):
         print(f"Page {page}: {len(contributors)} contributor(s)")
 
         for contributor in contributors:
-            if 'login' in contributor and 'contributions' in contributor:
-                contributor_data = {
-                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                    'login': contributor["login"],
-                    'contributions': contributor["contributions"]
-                }
-                contributors_list.append(contributor_data)
+            # Using `.get()` to handle possible missing keys or `None` values
+            contributor_data = {
+                'repo_url': f'{HTML_URL}://{github_id}/{repo_name}',
+                'login': contributor.get("login"),
+                'contributions': contributor.get("contributions")
+            }
+            contributors_list.append(contributor_data)
 
         # If fewer than 100 contributors are returned, we've reached the end
         if len(contributors) < 100:
@@ -422,88 +426,106 @@ async def get_repo_contributors(github_id: str, repo_name: str):
 
         page += 1
 
-    print(f'Total contributors: {total_contributors_count}')
+    print("-" * 20)
+    print("api/repos/contributor")
+    print(f'{repo_name} - Total contributors: {total_contributors_count}')
     return Response(content=json.dumps(contributors_list), media_type="application/json")
-
-#----------------------------------------------------------------#
+# ------------------------ #
 
 # -------------------- /repos/issues ------------------------------#
 @router.get('/issues', response_class=Response)
 async def get_repo_issues(github_id: str, repo_name: str, since: str):
     issues = []
     states = ['open', 'closed']
-
     total_issue_count = 0
+    max_issue_count = 500  # Set maximum limit for issues
 
     for state in states:
         page = 1
-        while True:
+        while total_issue_count < max_issue_count:
             await asyncio.sleep(REQ_DELAY)
             issue_list = await callGithubAPI_ISSUE(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+            
+            # Handle potential errors or empty lists
+            if 'error' in issue_list or not issue_list:
+                break
+            
             total_issue_count += len(issue_list)
             print(f'State: {state}')
             print(f"Page {page}: {len(issue_list)} issue(s)")
-            if 'error' in issue_list or not issue_list:
-                break
 
             for issue in issue_list:
                 issue_data = {
-                    'id': issue['id'],
+                    'id': issue.get('id'),
                     'contributed_github_id': github_id,
-                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                    'state': issue['state'],
-                    'title': issue['title'],
-                    'publisher_github_id': issue['user']['login'] if issue['user'] else 'Unknown',
-                    'last_update': issue['created_at'],
+                    'repo_url': f'{HTML_URL}://{github_id}/{repo_name}',
+                    'state': issue.get('state'),
+                    'title': issue.get('title'),
+                    'publisher_github_id': issue.get('user', {}).get('login', 'Unknown'),
+                    'last_update': issue.get('created_at')
                 }
                 issues.append(issue_data)
-            
-            if len(issue_list) < 100:
+
+            # Check if the total_issue_count has reached the maximum limit
+            if total_issue_count >= max_issue_count or len(issue_list) < 100:
                 break
 
             page += 1
-    print(f'Total issues: {total_issue_count}')
+
+    print("-" * 20)
+    print("api/repos/issue")
+    print(f'{repo_name} - Total issues: {total_issue_count} since {since}')
     return Response(content=json.dumps(issues), media_type="application/json")
+# ------------------------ #
 
 #-------------------- repos/pulls ------------------------------#
 @router.get('/pulls', response_class=Response)
 async def get_repo_pulls(github_id: str, repo_name: str, since: str):
     pulls = []
     states = ['open', 'closed']
-
     total_pull_count = 0
+    max_pull_count = 500  # Set maximum limit for pulls
 
     for state in states:
         page = 1
-        while True:
+        while total_pull_count < max_pull_count:
             await asyncio.sleep(REQ_DELAY)
             pull_list = await callGithubAPI_PULL(suffix_URL=repo_name, github_id=github_id, state=state, page=page, since=since)
+
+            # Handle potential errors or empty lists
+            if 'error' in pull_list or not pull_list:
+                break
+            
             total_pull_count += len(pull_list)
             print(f'State: {state}')
             print(f"Page {page}: {len(pull_list)} PR(s)")
-            if 'error' in pull_list or not pull_list:
-                break
 
             for pull in pull_list:
                 pull_data = {
-                    'id': pull["id"],
+                    'id': pull.get("id"),
                     'contributed_github_id': github_id,
-                    'state': pull["state"],
-                    'title': pull["title"],
+                    'state': pull.get("state"),
+                    'title': pull.get("title"),
                     'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
-                    'requester_id': pull['user']['login'],
-                    'published_date': pull['created_at'],
-                    'last_update': pull['updated_at'],
+                    'requester_id': pull.get('user', {}).get('login', 'Unknown'),
+                    'published_date': pull.get('created_at'),
+                    'last_update': pull.get('updated_at'),
                 }
                 pulls.append(pull_data)
 
-            if len(pull_list) < 100:
+            # Check if the total_pull_count has reached the maximum limit
+            if total_pull_count >= max_pull_count or len(pull_list) < 100:
                 break
 
             page += 1
-    print(f'Total pulls: {total_pull_count}')
+
+    print("-" * 20)
+    print("api/repos/pr")
+    print(f'{repo_name} - Total pulls: {total_pull_count} since {since}')
 
     return Response(content=json.dumps(pulls), media_type="application/json")
+
+# ------------------------ #
 
 #-------------------- repos/commits ------------------------------#
 @router.get('/commit', response_class=Response)
@@ -511,7 +533,7 @@ async def get_commits(github_id: str, repo_name: str, since: str):
     page = 1
     commits = []
     per_page = 100  
-    max_pages = 5
+    max_pages = 2
     total_commit_count = 0
 
     try:
@@ -521,6 +543,7 @@ async def get_commits(github_id: str, repo_name: str, since: str):
                 break
 
             total_commit_count += len(commit_list)
+            print("-"*20)
             print(f"Page {page}: {len(commit_list)} commit(s)")
 
             for commit in commit_list:
@@ -549,7 +572,9 @@ async def get_commits(github_id: str, repo_name: str, since: str):
 
             page += 1
 
-        print(f'Total commits: {total_commit_count}')
+        print("-"*20)
+        print("api/repos/commit")
+        print(f'{repo_name} - Total commits: {total_commit_count} since {since}')
         return Response(content=json.dumps(commits), media_type="application/json")
 
     except Exception as e:

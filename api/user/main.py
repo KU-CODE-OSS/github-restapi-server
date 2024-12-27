@@ -57,19 +57,25 @@ async def get(github_id: str):
         print(f"Error encountered: {student['error']}")
         raise HTTPException(status_code=404, detail=f"User {GithubID} not found")
     
+    # Use .get() to safely access keys and allow None values
     user_item = {
-        'GithubID': student['login'],
-        'Follower_CNT': student['followers'],
-        'Following_CNT': student['following'],
-        'Public_repos_CNT': student['public_repos'],
-        'Github_profile_Create_Date': student['created_at'],
-        'Github_profile_Update_Date': student['updated_at'],
-        'email': student['email'],
+        'GithubID': student.get('login'),
+        'Follower_CNT': student.get('followers'),
+        'Following_CNT': student.get('following'),
+        'Public_repos_CNT': student.get('public_repos'),
+        'Github_profile_Create_Date': student.get('created_at'),
+        'Github_profile_Update_Date': student.get('updated_at'),
+        'email': student.get('email'),
         'crawled_date': datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ')
     }
-    print("-"*20)
-    print(user_item)
 
+    # Replace any None values with "null" (this step is redundant for JSON serialization in Python but included for clarity)
+    user_item = {k: (v if v is not None else None) for k, v in user_item.items()}
+
+    print("-" * 20)
+    print("api/user")
+    print(user_item)
+    
     return Response(content=json.dumps(user_item), media_type='application/json')
 # ---------------------------------------------------------------#
 
@@ -79,7 +85,7 @@ async def get(github_id: str):
     page = 1
     repos = []
     per_page = 100
-    
+
     while True:
         await asyncio.sleep(REQ_DELAY)
         repo_list = await callGithubAPIUserRepo(f'repos?q=&page={page}&per_page={per_page}', github_id=github_id)
@@ -87,19 +93,22 @@ async def get(github_id: str):
             break
 
         for repo in repo_list:
-            if not repo['private']:
+            # Only include public repositories and ensure all data fields are safe
+            if not repo.get('private', True):
                 user = {
-                    'id': repo['id'],
-                    'name': repo['name'],
-                    'full_name': repo['full_name'],
+                    'id': repo.get('id'),
+                    'name': repo.get('name'),
+                    'full_name': repo.get('full_name')
                 }
                 repos.append(user)
-        
+
+        # If the number of repos fetched is less than per_page, break out of loop as there are no more
         if len(repo_list) < per_page:
             break
 
         page += 1
-    
-    print("-"*20)
+
+    print("-" * 20)
+    print("api/user/repos")
     print(f"Total repos: {len(repos)}")
     return Response(content=json.dumps(repos), media_type='application/json')
