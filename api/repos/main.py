@@ -414,7 +414,7 @@ async def get_repo_contributors(github_id: str, repo_name: str):
         for contributor in contributors:
             # Using `.get()` to handle possible missing keys or `None` values
             contributor_data = {
-                'repo_url': f'{HTML_URL}://{github_id}/{repo_name}',
+                'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                 'login': contributor.get("login"),
                 'contributions': contributor.get("contributions")
             }
@@ -458,7 +458,7 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
                 issue_data = {
                     'id': issue.get('id'),
                     'contributed_github_id': github_id,
-                    'repo_url': f'{HTML_URL}://{github_id}/{repo_name}',
+                    'repo_url': f'{HTML_URL}/{github_id}/{repo_name}',
                     'state': issue.get('state'),
                     'title': issue.get('title'),
                     'publisher_github_id': issue.get('user', {}).get('login', 'Unknown'),
