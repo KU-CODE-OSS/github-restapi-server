@@ -19,8 +19,7 @@ app.include_router(user.router)
 app.include_router(repos.router)
 
 #--- ROOT ----#
-@app.get("/home")
+@app.get("")
 async def root():
-
     return {"message": "Welcome to the FastAPI application"}
 #--- ---#
