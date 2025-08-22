@@ -318,6 +318,8 @@ async def get_repo_data(github_id: str, repo_id: str):
     await asyncio.sleep(REQ_DELAY)
     languages = await call_github_api_detail(suffix_url=f'{repository_name}/languages', github_id=github_id)
     language_list = list(languages.keys()) if 'error' not in languages else []
+    # Dictionary consists of Languages & Bytes of each language
+    language_bytes = languages if 'error' not in languages else {}
 
     # Pagination logic for contributors
     contributors_list = []
@@ -379,6 +381,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'contributed_open_pr_count': contributed_open_pr_count,
         'contributed_closed_pr_count': contributed_closed_pr_count,
         'language': language_list,
+        'language_bytes': language_bytes,
         'contributors': contributors_list,
         'license': license_name,
         'has_readme': has_readme,
