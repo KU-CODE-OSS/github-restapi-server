@@ -237,12 +237,8 @@ async def get_repo_data(github_id: str, repo_id: str):
         else:
             raise HTTPException(status_code=500, detail=f"Failed to fetch repository: {repository_data.get('message', 'Unknown error')}")
 
-    if repository_data.get("fork", False) == True:
-        parent_github_id = repository_data.get("parent", {}).get("owner", {}).get("login", github_id)
-        repository_name = repository_data.get("parent", {}).get("name", "")
-    else:
-        parent_github_id = github_id
-        repository_name = repository_data.get("name", "")
+    parent_github_id = github_id
+    repository_name = repository_data.get("name", "")
 
     # Repository owner details
     await asyncio.sleep(REQ_DELAY)
