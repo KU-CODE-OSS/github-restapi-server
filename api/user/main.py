@@ -5,6 +5,7 @@ from commons.api_client import request
 
 import httpx
 import json
+import asyncio
 from datetime import datetime
 
 router = APIRouter(
@@ -98,7 +99,14 @@ async def get_repos(github_id: str):
                 repository_data = {
                     'id': repo.get('id'),
                     'name': repo.get('name'),
-                    'full_name': repo.get('full_name')
+                    'full_name': repo.get('full_name'),
+                    'updated_at': repo.get('updated_at'),
+                    'pushed_at': repo.get('pushed_at'),
+                    'default_branch': repo.get('default_branch'),
+                    'forked': repo.get('fork', False),
+                    'archived': repo.get('archived', False),
+                    'disabled': repo.get('disabled', False),
+                    'open_issues_count': repo.get('open_issues_count')
                 }
                 repositories.append(repository_data)
 
