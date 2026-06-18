@@ -167,7 +167,7 @@ async def call_github_api_contributor(suffix_url, github_id, page):
 # ------------------------ #
 
 # ---ISSUE RELATED URL ---#
-async def call_github_api_issue(suffix_url, github_id, state, page, since):
+async def call_github_api_issue(suffix_url, github_id, state, page, since, per_page=100):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -178,7 +178,7 @@ async def call_github_api_issue(suffix_url, github_id, state, page, since):
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/repos/{github_id}/{suffix_url}/issues?q=&since={since}&state={state}&page={page}&per_page=100'
+    url = f'{API_URL}/repos/{github_id}/{suffix_url}/issues?q=&since={since}&state={state}&page={page}&per_page={per_page}'
     return await request(url, headers)
 
 # --- PR RELATED URL ---#
@@ -363,6 +363,7 @@ async def get_repo_data(github_id: str, repo_id: str):
         'owner_github_id': repository_data.get("owner", {}).get("login"),
         'created_at': repository_data.get("created_at"),
         'updated_at': repository_data.get("updated_at"),
+        'pushed_at': repository_data.get("pushed_at"),
         'forked': repository_data.get('fork', False),
         'forks_count': repository_data.get("forks_count"),
         'stars_count': repository_data.get("stargazers_count"),
@@ -431,6 +432,38 @@ async def get_repo_contributors(github_id: str, repo_name: str):
     return Response(content=json.dumps(contributors_list), media_type="application/json")
 # ------------------------ #
 
+# -------------------- /repos/activity ------------------------------#
+@router.get('/activity', response_class=Response)
+async def get_repo_activity(github_id: str, repo_name: str, since: str):
+    await asyncio.sleep(REQ_DELAY)
+    activity_items = await call_github_api_issue(
+        suffix_url=repo_name,
+        github_id=github_id,
+        state='all',
+        page=1,
+        since=since,
+        per_page=1,
+    )
+
+    if 'error' in activity_items:
+        raise HTTPException(status_code=404, detail=f"Activity in {repo_name} not found")
+
+    latest_updated_at = None
+    latest_type = None
+    has_updates = bool(activity_items)
+    if has_updates:
+        latest_item = activity_items[0]
+        latest_updated_at = latest_item.get('updated_at')
+        latest_type = 'pr' if latest_item.get('pull_request') else 'issue'
+
+    activity_data = {
+        'has_updates': has_updates,
+        'latest_updated_at': latest_updated_at,
+        'latest_type': latest_type,
+    }
+    return Response(content=json.dumps(activity_data), media_type="application/json")
+# ------------------------ #
+
 # -------------------- /repos/issues ------------------------------#
 @router.get('/issues', response_class=Response)
 async def get_repo_issues(github_id: str, repo_name: str, since: str):
@@ -461,7 +494,7 @@ async def get_repo_issues(github_id: str, repo_name: str, since: str):
                     'state': issue.get('state'),
                     'title': issue.get('title'),
                     'publisher_github_id': issue.get('user', {}).get('login', 'Unknown'),
-                    'last_update': issue.get('created_at')
+                    'last_update': issue.get('updated_at')
                 }
                 issues.append(issue_data)
 
