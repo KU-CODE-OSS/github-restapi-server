@@ -167,7 +167,7 @@ async def call_github_api_contributor(suffix_url, github_id, page):
 # ------------------------ #
 
 # ---ISSUE RELATED URL ---#
-async def call_github_api_issue(suffix_url, github_id, state, page, since, per_page=100):
+async def call_github_api_issue(suffix_url, github_id, state, page, since, per_page=100, sort='updated', direction='desc'):
     global remaining_requests, current_token
     
     if remaining_requests <= 0 or current_token is None:
@@ -178,7 +178,7 @@ async def call_github_api_issue(suffix_url, github_id, state, page, since, per_p
         'Accept': 'application/vnd.github.v3+json',
     }
 
-    url = f'{API_URL}/repos/{github_id}/{suffix_url}/issues?q=&since={since}&state={state}&page={page}&per_page={per_page}'
+    url = f'{API_URL}/repos/{github_id}/{suffix_url}/issues?q=&since={since}&state={state}&sort={sort}&direction={direction}&page={page}&per_page={per_page}'
     return await request(url, headers)
 
 # --- PR RELATED URL ---#
@@ -434,32 +434,49 @@ async def get_repo_contributors(github_id: str, repo_name: str):
 
 # -------------------- /repos/activity ------------------------------#
 @router.get('/activity', response_class=Response)
-async def get_repo_activity(github_id: str, repo_name: str, since: str):
-    await asyncio.sleep(REQ_DELAY)
-    activity_items = await call_github_api_issue(
-        suffix_url=repo_name,
-        github_id=github_id,
-        state='all',
-        page=1,
-        since=since,
-        per_page=1,
-    )
+async def get_repo_activity(github_id: str, repo_name: str, since: str, activity_type: str = 'all'):
+    page = 1
+    per_page = 100
+    max_pages = 5
+    normalized_type = activity_type.lower()
+    if normalized_type not in ('all', 'issue', 'pr'):
+        raise HTTPException(status_code=400, detail="activity_type must be one of all, issue, or pr")
 
-    if 'error' in activity_items:
-        raise HTTPException(status_code=404, detail=f"Activity in {repo_name} not found")
+    while page <= max_pages:
+        await asyncio.sleep(REQ_DELAY)
+        activity_items = await call_github_api_issue(
+            suffix_url=repo_name,
+            github_id=github_id,
+            state='all',
+            page=page,
+            since=since,
+            per_page=per_page,
+        )
 
-    latest_updated_at = None
-    latest_type = None
-    has_updates = bool(activity_items)
-    if has_updates:
-        latest_item = activity_items[0]
-        latest_updated_at = latest_item.get('updated_at')
-        latest_type = 'pr' if latest_item.get('pull_request') else 'issue'
+        if 'error' in activity_items:
+            raise HTTPException(status_code=404, detail=f"Activity in {repo_name} not found")
+
+        if not activity_items:
+            break
+
+        for item in activity_items:
+            item_type = 'pr' if item.get('pull_request') else 'issue'
+            if normalized_type in ('all', item_type):
+                activity_data = {
+                    'has_updates': True,
+                    'latest_updated_at': item.get('updated_at'),
+                    'latest_type': item_type,
+                }
+                return Response(content=json.dumps(activity_data), media_type="application/json")
+
+        if len(activity_items) < per_page:
+            break
+        page += 1
 
     activity_data = {
-        'has_updates': has_updates,
-        'latest_updated_at': latest_updated_at,
-        'latest_type': latest_type,
+        'has_updates': False,
+        'latest_updated_at': None,
+        'latest_type': None,
     }
     return Response(content=json.dumps(activity_data), media_type="application/json")
 # ------------------------ #
